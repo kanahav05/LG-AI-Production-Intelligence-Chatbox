@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-dotenv
+google-generativeai
+scikit-learn
+pandas
+numpy
+websockets
+aiofiles
