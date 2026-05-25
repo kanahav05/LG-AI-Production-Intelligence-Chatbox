@@ -1,17 +1,9 @@
-import {
-  getDatabaseSnapshot,
-  getCurrentDateStr,
-  getCurrentTimeStr
-} from './db.js';
-
-const snap = getDatabaseSnapshot(
-  getCurrentDateStr(),
-  getCurrentTimeStr()
-);
-
-console.log('Lines:', snap.rows.length);
-console.log('Summary:', snap.summary);
-console.log('Alerts:', snap.alerts);
-console.log('R1 Prediction:', snap.predictions['R1']);
-
-console.log('Lines found:', snap.rows.map(r => r.line));
+import { fetchLive } from './api.js';
+fetchLive().then(data => {
+  console.log("Backend connected.");
+  console.log("Lines:", data.rows.length);
+  console.log("Summary:", data.summary);
+  console.log("Alerts:", data.alerts);
+}).catch(err => {
+  console.error("Backend not reachable. Is FastAPI running on port 8000?", err);
+});
