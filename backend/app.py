@@ -169,18 +169,22 @@ def rag_retrieve(
     return {"rows": rows, "context": context, "count": len(rows)}
 
 # Chat endpoint
+from rag import process_chat
 @app.post("/api/chat")
 def chat(body: dict):
     """
     RAG pipeline endpoint.
-    Accepts a user query, retrieves relevant data,
-    calls Gemini API, returns natural language response.
-    Full implementation in Week 3 when rag.py is built.
+    Accepts query + optional conversation history.
+    Returns Gemini-generated response grounded in production data.
     """
-    return {
-        "response": "RAG pipeline coming in Week 3.",
-        "query":    body.get("query", "")
-    }
+    query   = body.get("query", "")
+    history = body.get("history", [])
+
+    if not query.strip():
+        return {"error": "Query cannot be empty"}
+
+    result = process_chat(query, history)
+    return result
 
 # Predict endpoint /
 @app.get("/api/predict/{line}")

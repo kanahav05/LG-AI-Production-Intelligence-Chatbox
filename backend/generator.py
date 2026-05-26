@@ -1,6 +1,4 @@
 # generator.py
-# Python port of db.js logic.
-# Produces identical values to the JS version using the same
 # seed function, phase structure, and interpolation math.
 
 # Products & Lines 
@@ -28,7 +26,7 @@ for prod_id, prod_data in PRODUCTS.items():
     for line in prod_data["lines"]:
         LINE_TO_PRODUCT[line] = {"prod_id": prod_id, "name": prod_data["name"]}
 
-# Seed-based random (mirrors db.js seedRandom )
+# Seed-based random 
 def seed_random(seed_string):
     h = 1779033703 ^ len(seed_string)
     for ch in seed_string:
@@ -65,7 +63,7 @@ def is_production_active(time_str):
     mins = time_str_to_minutes(time_str)
     return 9*60 <= mins < 18*60
 
-# Core metrics (mirrors getLineMetricsAt in db.js)
+# Core metrics
 def get_line_metrics_at(line, date_str, time_str):
     """
     Returns plan, target, result, achieve for a line
@@ -142,7 +140,7 @@ def get_line_metrics_at(line, date_str, time_str):
         "below_threshold": achieve < ACHIEVE_THRESHOLD and target > 0,
     }
 
-# Full snapshot (mirrors getDatabaseSnapshot in db.js)
+# Full snapshot
 def get_database_snapshot(date_str, time_str):
     """Returns all 13 lines + summary row for a given moment."""
     rows         = []

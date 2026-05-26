@@ -11,7 +11,7 @@ from database import init_db, insert_records, get_record_count
 # How many months of history to generate
 MONTHS_BACK = 3
 
-# Snapshot times — one record per line at end of each shift phase
+# Snapshot times - one record per line at end of each shift phase
 # These are the "checkpoint" times stored in SQLite
 SNAPSHOT_TIMES = [
     "10:30",   # end of Early Morning Shift
@@ -20,7 +20,7 @@ SNAPSHOT_TIMES = [
     "18:00",   # end of Evening Shift
 ]
 
-#  Date range─
+#  Date range
 end_date   = datetime.today()
 start_date = end_date - timedelta(days=MONTHS_BACK * 30)
 
@@ -58,7 +58,7 @@ def generate():
     skipped   = 0
 
     while day <= end_date:
-        # Skip weekends — factory doesn't run
+        # Skip weekends - factory doesn't run
         if day.weekday() >= 5:
             skipped += 1
             day     += timedelta(days=1)
