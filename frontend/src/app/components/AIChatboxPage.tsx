@@ -1,3 +1,4 @@
+import ReactMarkdown from "react-markdown";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Header } from "./Header";
@@ -44,7 +45,7 @@ const INITIAL_MESSAGE: Message = {
 export function AIChatboxPage() {
   const navigate = useNavigate();
 
-  // ── Chat state ─────────────────────────────────────────────
+  // Chat state ─
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [inputText, setInputText]  = useState("");
   const [isLoading, setIsLoading]  = useState(false);
@@ -54,24 +55,24 @@ export function AIChatboxPage() {
     { role: "user" | "assistant"; content: string }[]
   >([]);
 
-  // ── Chat session history (sidebar) ────────────────────────
+  // Chat session history (sidebar)
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
-  // ── Voice input state ──────────────────────────────────────
+  // Voice input state 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  // ── File upload ref ────────────────────────────────────────
+  // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Auto-scroll to bottom on new messages ─────────────────
+  // Auto-scroll to bottom on new messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── Send message to backend ───────────────────────────────
+  // Send message to backend 
   const handleSendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? inputText).trim();
     if (!text || isLoading) return;
@@ -142,7 +143,7 @@ export function AIChatboxPage() {
     }
   };
 
-  // ── Detail toggle — re-sends query with "detail" appended ──
+  // Detail toggle — re-sends query with "detail" appended 
   const handleDetailToggle = async (message: Message) => {
     if (message.isDetailed) {
       // Already detailed — just toggle off visually
@@ -158,7 +159,7 @@ export function AIChatboxPage() {
     );
   };
 
-  // ── Download response as .txt ──────────────────────────────
+  // Download response as .txt 
   const handleDownload = (content: string) => {
     const blob = new Blob([content], { type: "text/plain" });
     const url  = URL.createObjectURL(blob);
@@ -169,7 +170,7 @@ export function AIChatboxPage() {
     URL.revokeObjectURL(url);
   };
 
-  // ── New chat ───────────────────────────────────────────────
+  // New chat
   const handleNewChat = () => {
     setMessages([{
       ...INITIAL_MESSAGE,
@@ -180,7 +181,7 @@ export function AIChatboxPage() {
     setActiveSessionId(null);
   };
 
-  // ── Load session from sidebar ──────────────────────────────
+  //Load session from sidebar 
   const handleLoadSession = (session: ChatSession) => {
     setMessages(session.messages);
     setActiveSessionId(session.id);
@@ -246,7 +247,7 @@ export function AIChatboxPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Header title="AI Chatbox" />
+      <Header/>
 
       <div className="flex-1 flex overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
 
@@ -325,7 +326,7 @@ export function AIChatboxPage() {
           </div>
         </div>
 
-        {/* ── Main chat area ────────────────────────────────────── */}
+        {/* Main chat area*/}
         <div className="flex-1 flex flex-col min-w-0">
 
           {/* Messages */}
@@ -357,8 +358,8 @@ export function AIChatboxPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="text-sm leading-relaxed whitespace-pre-line">
-                        {message.content}
+                      <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
                       </div>
 
                       <div className="flex items-center justify-between mt-3">
@@ -395,7 +396,7 @@ export function AIChatboxPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* ── Input bar ──────────────────────────────────────── */}
+          {/* Input bar*/}
           <div className="p-6 border-t border-border bg-card">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-end gap-3">

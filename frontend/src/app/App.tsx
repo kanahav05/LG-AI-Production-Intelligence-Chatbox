@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { SignInPage } from "./components/SignInPage";
 import { MainDashboard } from "./components/MainDashboard";
 import { AIChatboxPage } from "./components/AIChatboxPage";
@@ -7,10 +7,7 @@ import { AnomalyAlert, useAnomalyDetection } from "./components/AnomalyAlert";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function AppContent() {
-  const { anomaly, clearAnomaly } = useAnomalyDetection();
-  const location = useLocation();
-
-  const showAnomalyAlert = anomaly && ['/dashboard', '/chatbox', '/live-dashboard'].includes(location.pathname);
+  const { alerts, clearAlerts } = useAnomalyDetection();
 
   return (
     <>
@@ -43,13 +40,8 @@ function AppContent() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {showAnomalyAlert && (
-        <AnomalyAlert
-          line={anomaly.line}
-          achieve={anomaly.achieve}
-          reason={anomaly.reason}
-          onClose={clearAnomaly}
-        />
+      {alerts.length > 0 && (
+        <AnomalyAlert alerts={alerts} onClose={clearAlerts} />
       )}
     </>
   );

@@ -1,15 +1,7 @@
-import { Navigate } from "react-router";
+import { Navigate } from 'react-router-dom'
 
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-}
-
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const isAuthenticated = localStorage.getItem("lg-auth") === "true";
-
-  if (!isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
+export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuth = localStorage.getItem('lg-auth') === 'true'
+  if (!isAuth) return <Navigate to="/" replace />
+  return <>{children}</>
 }

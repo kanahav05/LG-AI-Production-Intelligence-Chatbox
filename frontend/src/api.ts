@@ -25,6 +25,8 @@ export interface LiveSnapshot {
   production_active: boolean;
   rows: LineRow[];
   summary: {
+    date: string;
+    time: string;
     plan: number;
     target: number;
     result: number;
