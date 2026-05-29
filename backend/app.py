@@ -25,6 +25,7 @@ from database  import (
     query_day_summary,
     query_for_rag,
 )
+from ml import predict_line, predict_all, train_models
 
 # App setup
 app = FastAPI(
@@ -42,12 +43,15 @@ app.add_middleware(
     allow_headers     = ["*"],
 )
 
-# Initialise DB on startup
+# Initialise DB and train models on startup
 @app.on_event("startup")
 def startup():
     init_db()
     count = get_record_count()
     print(f"Server started. Historical records in DB: {count}")
+    print("Training ML models...")
+    train_models()
+    print("ML models trained successfully.")
 
 # Health check
 @app.get("/")
@@ -186,16 +190,18 @@ def chat(body: dict):
     result = process_chat(query, history)
     return result
 
-# Predict endpoint /
+# Predict endpoints
+@app.get("/api/predict/all")
+def predict_all_lines():
+    """ML predictions for all 13 production lines."""
+    result = predict_all()
+    return result
+
 @app.get("/api/predict/{line}")
-def predict(line: str):
-    """
-    ML prediction endpoint.
-    """
-    return {
-        "line":    line,
-        "message": "ML prediction ."
-    }
+def predict_one(line: str):
+    """ML prediction for a single production line."""
+    result = predict_line(line)
+    return result
 
 # WebSocket live stream
 class ConnectionManager:

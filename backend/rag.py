@@ -22,7 +22,7 @@ from database import query_for_rag, query_day_summary
 
 # Gemini setup 
 GEMINI_MODEL   = "gemini-2.5-flash"
-GEMINI_API_KEY = "AIzaSyAFmrX9ecnudpS1PKVCe1Zw1dMKoD5ZtNc" 
+GEMINI_API_KEY = "" 
 
 def get_client():
     """Returns a Gemini client using the hardcoded API key."""
