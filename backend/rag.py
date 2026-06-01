@@ -1,11 +1,17 @@
 # rag.py
 # RAG pipeline — Retrieval Augmented Generation.
-# Handles all /api/chat requests.s
+# Handles all /api/chat requests.
 
 import os
 import re
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from google import genai
+
+# Load environment variables from .env file
+load_dotenv()
+load_dotenv(override=True)
+print(os.getenv("GEMINI_API_KEY"))
 
 from generator import (
     get_database_snapshot,
@@ -22,10 +28,12 @@ from database import query_for_rag, query_day_summary
 
 # Gemini setup 
 GEMINI_MODEL   = "gemini-2.5-flash"
-GEMINI_API_KEY = "" 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def get_client():
-    """Returns a Gemini client using the hardcoded API key."""
+    """Returns a Gemini client using the key from environment variables."""
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY not found in environment variables.")
     return genai.Client(api_key=GEMINI_API_KEY)
 
 # System prompt 
@@ -281,7 +289,7 @@ def retrieve_and_format(params):
 # Call Gemini 
 def call_gemini(query_str, context, history=None, is_detailed=False):
     """
-    Builds the full prompt and calls Gemini 2.5 Flash using the native key.
+    Builds the full prompt and calls Gemini 2.5 Flash using the env key.
     """
     history_text = ""
     if history:
