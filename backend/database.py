@@ -184,15 +184,15 @@ def query_for_rag(
         conditions.append("phase = ?")
         params.append(phase)
     if time:
-        # Find snapshots within 30 minutes of requested time
+        # Find snapshots within 90 minutes of requested time
         conditions.append("""
-            ABS(
-                (CAST(SUBSTR(time,1,2) AS INTEGER)*60 +
-                 CAST(SUBSTR(time,4,2) AS INTEGER)) -
-                (CAST(SUBSTR(?,1,2) AS INTEGER)*60 +
-                 CAST(SUBSTR(?,4,2) AS INTEGER))
-            ) <= 30
-        """)
+                          ABS(
+                          (CAST(SUBSTR(time,1,2) AS INTEGER)*60 +
+                          CAST(SUBSTR(time,4,2) AS INTEGER)) -
+                          (CAST(SUBSTR(?,1,2) AS INTEGER)*60 +
+                          CAST(SUBSTR(?,4,2) AS INTEGER))
+                          ) <= 90
+                          """)
         params.extend([time, time])
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""

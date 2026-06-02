@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { Header } from "./Header";
 import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line,
+} from "recharts";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import {
   Download,
   FileText,
   TrendingUp,
@@ -21,7 +28,7 @@ import {
 
 const productFilters = ["All", "REF", "WMC", "COMP", "RAC", "A08"];
 
-// ── Helpers ───────────────────────────────────────────────────
+// Helpers
 function getAchieveColor(achieve: number) {
   if (achieve >= 90) return "var(--success-green)";
   if (achieve >= 80) return "var(--warning-yellow)";
@@ -35,14 +42,14 @@ function formatTime(date: Date) {
 export function LiveDashboardPage() {
   const navigate = useNavigate();
 
-  // ── State ──────────────────────────────────────────────────
+  // State
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [liveData,       setLiveData]        = useState<LiveSnapshot | null>(null);
   const [predictions,    setPredictions]     = useState<Prediction[]>([]);
   const [loading,        setLoading]         = useState(true);
   const [lastUpdated,    setLastUpdated]     = useState<Date>(new Date());
 
-  // ── Initial data fetch ────────────────────────────────────
+  // Initial data fetch
   useEffect(() => {
     Promise.all([fetchLive(), fetchPredictions()])
       .then(([live, preds]) => {
@@ -53,7 +60,7 @@ export function LiveDashboardPage() {
       .catch(() => setLoading(false));
   }, []);
 
-  // ── WebSocket for per-second live updates ─────────────────
+  //  WebSocket for per-second live updates
   useEffect(() => {
     const stop = connectLiveStream({
       onSnapshot: (data) => {
@@ -64,7 +71,7 @@ export function LiveDashboardPage() {
     return () => stop();
   }, []);
 
-  // ── Refresh predictions every 60 seconds ──────────────────
+  // Refresh predictions every 60 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       fetchPredictions()
@@ -74,37 +81,43 @@ export function LiveDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // ── Manual refresh ─────────────────────────────────────────
+  // Manual refresh
   const handleRefresh = useCallback(() => {
     fetchPredictions()
       .then(preds => setPredictions(preds.predictions))
       .catch(() => {});
   }, []);
 
-  // ── Filtered rows ──────────────────────────────────────────
+  // Filtered rows
   const filteredRows = (liveData?.rows ?? []).filter(
     row => selectedFilter === "All" || row.product === selectedFilter
   );
 
-  // ── KPI values from live data ──────────────────────────────
+  // KPI values
   const totalPlan    = liveData?.summary.plan    ?? 0;
   const totalResult  = liveData?.summary.result  ?? 0;
   const avgAchieve   = liveData?.summary.achieve ?? 0;
   const linesBelow80 = liveData?.alerts.length   ?? 0;
 
-  // ── Prediction lookup by line ──────────────────────────────
+  // Prediction lookup by line 
   const predMap = Object.fromEntries(
     predictions.map(p => [p.line, p])
   );
 
-  // ── Export CSV ─────────────────────────────────────────────
+  // Export CSV 
   const handleExportCSV = () => {
     if (!liveData) return;
     const headers = "Date,Time,Line,Product,Phase,Plan,Target,Result,Achieve%,Status";
     const rows = liveData.rows.map(r =>
-      `${r.date},${r.time},${r.line},${r.product},${r.phase},${r.plan},${r.target},${r.result},${r.achieve.toFixed(1)},${r.below_threshold ? "Below Threshold" : "On Track"}`
+      `${r.date},${r.time},${r.line},${r.product},${r.phase},` +
+      `${r.plan},${r.target},${r.result},${r.achieve.toFixed(1)},` +
+      `${r.below_threshold ? "Below Threshold" : "On Track"}`
     );
- const summaryRow = `${liveData.summary.date},${liveData.summary.time},TOTAL,ALL,,${liveData.summary.plan},${liveData.summary.target},${liveData.summary.result},${liveData.summary.achieve.toFixed(1)},`;    const csv = [headers, ...rows, summaryRow].join("\n");
+    const summaryRow =
+      `${liveData.summary.date},${liveData.summary.time},TOTAL,ALL,,` +
+      `${liveData.summary.plan},${liveData.summary.target},` +
+      `${liveData.summary.result},${liveData.summary.achieve.toFixed(1)},`;
+    const csv  = [headers, ...rows, summaryRow].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
@@ -114,7 +127,7 @@ export function LiveDashboardPage() {
     URL.revokeObjectURL(url);
   };
 
-  // ── Export shift summary as text ───────────────────────────
+  // Export shift summary as text
   const handleShiftSummary = () => {
     if (!liveData) return;
     const lines = [
@@ -130,7 +143,11 @@ export function LiveDashboardPage() {
       ``,
       `LINE BREAKDOWN`,
       ...liveData.rows.map(r =>
-        `  ${r.line.padEnd(8)} | ${r.product.padEnd(5)} | Plan: ${String(r.plan).padStart(5)} | Result: ${String(r.result).padStart(5)} | Achieve: ${r.achieve.toFixed(1).padStart(6)}% | ${r.below_threshold ? "BELOW THRESHOLD" : "On Track"}`
+        `  ${r.line.padEnd(8)} | ${r.product.padEnd(5)} | ` +
+        `Plan: ${String(r.plan).padStart(5)} | ` +
+        `Result: ${String(r.result).padStart(5)} | ` +
+        `Achieve: ${r.achieve.toFixed(1).padStart(6)}% | ` +
+        `${r.below_threshold ? "BELOW THRESHOLD" : "On Track"}`
       ),
       ``,
       `Generated by LG AI Production Intelligence Chatbox`,
@@ -144,9 +161,79 @@ export function LiveDashboardPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Export PDF
+  const handleExportPDF = () => {
+    if (!liveData) return;
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(16);
+    doc.setTextColor(165, 0, 52);
+    doc.text("LG Electronics — Production Report", 14, 18);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(
+      `Date: ${liveData.date}  |  Time: ${liveData.time}  |  Generated by LG AI Chatbox`,
+      14, 26
+    );
+
+    // Summary table
+    doc.setFontSize(12);
+    doc.setTextColor(30);
+    doc.text("Factory Summary", 14, 38);
+
+    autoTable(doc, {
+      startY: 42,
+      head: [["Total Plan", "Total Target", "Total Result", "Avg Achieve %", "Alerts"]],
+      body: [[
+        liveData.summary.plan.toLocaleString(),
+        liveData.summary.target.toLocaleString(),
+        liveData.summary.result.toLocaleString(),
+        `${liveData.summary.achieve.toFixed(1)}%`,
+        `${liveData.alerts.length} line(s)`,
+      ]],
+      headStyles: { fillColor: [165, 0, 52] },
+      styles: { fontSize: 10 },
+    });
+
+    // Line breakdown table
+    // @ts-ignore
+    const afterSummary = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFontSize(12);
+    doc.text("Line Breakdown", 14, afterSummary);
+
+    autoTable(doc, {
+      startY: afterSummary + 4,
+      head: [["Line", "Product", "Phase", "Plan", "Target", "Result", "Achieve %", "Status"]],
+      body: liveData.rows.map(r => [
+        r.line,
+        r.product,
+        r.phase,
+        r.plan.toLocaleString(),
+        r.target.toLocaleString(),
+        r.result.toLocaleString(),
+        `${r.achieve.toFixed(1)}%`,
+        r.below_threshold ? "Below Threshold" : "On Track",
+      ]),
+      headStyles: { fillColor: [165, 0, 52] },
+      styles: { fontSize: 9 },
+      bodyStyles: { textColor: [50, 50, 50] },
+      didParseCell: (data) => {
+        if (data.column.index === 7 && data.cell.raw === "Below Threshold") {
+          data.cell.styles.textColor = [220, 38, 38];
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+    });
+
+    doc.save(`LG_Production_${liveData.date}_${liveData.time.replace(/:/g, "-")}.pdf`);
+  };
+
+  // Render
   return (
     <div className="min-h-screen bg-background">
-      <Header/>
+      <Header />
 
       <div className="p-6 space-y-6">
 
@@ -155,7 +242,7 @@ export function LiveDashboardPage() {
           <button
             onClick={() => navigate("/dashboard")}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 font-medium transition-all hover:bg-accent"
-            style={{ borderColor: "var(--lg-orange)", color: "var(--lg-orange)" }}
+            style={{ borderColor: "#A50034", color: "#A50034" }}
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
@@ -174,10 +261,11 @@ export function LiveDashboardPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
           <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Total Plan</span>
-              <TrendingUp className="w-5 h-5" style={{ color: "var(--lg-blue)" }} />
+              <TrendingUp className="w-5 h-5" style={{ color: "#A50034" }} />
             </div>
             <div className="text-3xl font-bold text-foreground">
               {loading ? "—" : totalPlan.toLocaleString()}
@@ -199,7 +287,7 @@ export function LiveDashboardPage() {
           <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Avg Achieve</span>
-              <CheckCircle2 className="w-5 h-5" style={{ color: "var(--lg-orange)" }} />
+              <CheckCircle2 className="w-5 h-5" style={{ color: "#A50034" }} />
             </div>
             <div
               className="text-3xl font-bold"
@@ -223,9 +311,105 @@ export function LiveDashboardPage() {
             </div>
             <div className="text-xs text-muted-foreground mt-1">lines need attention</div>
           </div>
+
         </div>
 
-        {/* Main grid */}
+        {/* Charts */}
+        {!loading && liveData && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* Bar chart — Plan vs Result */}
+            <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
+              <h2 className="text-lg font-bold text-foreground mb-4">
+                Plan vs Result — All Lines
+              </h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart
+                  data={liveData.rows.map(r => ({
+                    line:   r.line,
+                    Plan:   r.plan,
+                    Result: r.result,
+                  }))}
+                  margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis
+                    dataKey="line"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                  <Tooltip
+                    contentStyle={{
+                      background:   "var(--card)",
+                      border:       "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize:     12,
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Plan"   fill="#4ECDC4" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Result" fill="#FF6B35" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Line chart — Achieve % per line */}
+            <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
+              <h2 className="text-lg font-bold text-foreground mb-4">
+                Achievement % — All Lines
+              </h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart
+                  data={liveData.rows.map(r => ({
+                    line:    r.line,
+                    Achieve: parseFloat(r.achieve.toFixed(1)),
+                    Target:  80,
+                  }))}
+                  margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis
+                    dataKey="line"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  />
+                  <YAxis
+                    domain={[0, 110]}
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background:   "var(--card)",
+                      border:       "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize:     12,
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="Achieve"
+                    stroke="#FF6B35"
+                    strokeWidth={2}
+                    dot={{ fill: "#FF6B35", r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Target"
+                    stroke="#ef4444"
+                    strokeWidth={1.5}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    name="80% Threshold"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+          </div>
+        )}
+
+        {/* Main grid — Live line grid + Right column */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Live line grid */}
@@ -234,7 +418,7 @@ export function LiveDashboardPage() {
               <h2 className="text-xl font-bold text-foreground">Live Line Grid</h2>
               <span
                 className="px-3 py-1 rounded-full text-xs font-medium text-white animate-pulse"
-                style={{ background: "var(--gradient-cool)" }}
+                style={{ background: "#A50034" }}
               >
                 LIVE
               </span>
@@ -251,7 +435,7 @@ export function LiveDashboardPage() {
                       ? "text-white shadow-md"
                       : "bg-accent text-foreground hover:bg-muted"
                   }`}
-                  style={selectedFilter === filter ? { background: "var(--gradient-warm)" } : {}}
+                  style={selectedFilter === filter ? { background: "#A50034" } : {}}
                 >
                   {filter}
                 </button>
@@ -266,7 +450,7 @@ export function LiveDashboardPage() {
             ) : (
               <div className="space-y-4">
                 {filteredRows.map(row => {
-                  const pred = predMap[row.line];
+                  const pred     = predMap[row.line];
                   const willMeet = pred?.will_meet_plan ?? true;
                   return (
                     <div
@@ -278,7 +462,7 @@ export function LiveDashboardPage() {
                           <span className="font-bold text-foreground">{row.line}</span>
                           <span
                             className="px-3 py-1 rounded-full text-xs font-medium"
-                            style={{ background: "var(--accent)", color: "var(--lg-orange)" }}
+                            style={{ background:  "#FAF0F4", color: "#A50034" }}
                           >
                             {row.product}
                           </span>
@@ -304,7 +488,7 @@ export function LiveDashboardPage() {
                         <div
                           className="absolute top-0 left-0 h-full rounded-full transition-all duration-1000"
                           style={{
-                            width: `${Math.min(row.achieve, 100)}%`,
+                            width:      `${Math.min(row.achieve, 100)}%`,
                             background: getAchieveColor(row.achieve),
                           }}
                         />
@@ -315,15 +499,27 @@ export function LiveDashboardPage() {
                         <div className="flex items-center gap-2">
                           {willMeet ? (
                             <>
-                              <CheckCircle2 className="w-4 h-4" style={{ color: "var(--success-green)" }} />
-                              <span className="text-xs font-medium" style={{ color: "var(--success-green)" }}>
+                              <CheckCircle2
+                                className="w-4 h-4"
+                                style={{ color: "var(--success-green)" }}
+                              />
+                              <span
+                                className="text-xs font-medium"
+                                style={{ color: "var(--success-green)" }}
+                              >
                                 On Track
                               </span>
                             </>
                           ) : (
                             <>
-                              <TrendingDown className="w-4 h-4" style={{ color: "var(--error-red)" }} />
-                              <span className="text-xs font-medium" style={{ color: "var(--error-red)" }}>
+                              <TrendingDown
+                                className="w-4 h-4"
+                                style={{ color: "var(--error-red)" }}
+                              />
+                              <span
+                                className="text-xs font-medium"
+                                style={{ color: "var(--error-red)" }}
+                              >
                                 Will Miss Plan
                               </span>
                             </>
@@ -331,7 +527,8 @@ export function LiveDashboardPage() {
                         </div>
                         {pred && (
                           <span className="text-xs text-muted-foreground">
-                            Projected: {pred.projected_result.toLocaleString()} / {pred.plan.toLocaleString()} units
+                            Projected: {pred.projected_result.toLocaleString()} /{" "}
+                            {pred.plan.toLocaleString()} units
                           </span>
                         )}
                       </div>
@@ -370,7 +567,7 @@ export function LiveDashboardPage() {
                       className="p-4 rounded-lg border-l-4"
                       style={{
                         borderLeftColor: "var(--error-red)",
-                        background: "var(--accent)"
+                        background:      "var(--accent)",
                       }}
                     >
                       <div className="font-medium text-foreground mb-1">{alert.line}</div>
@@ -388,8 +585,10 @@ export function LiveDashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="flex items-center gap-2 text-sm"
-                    style={{ color: "var(--success-green)" }}>
+                  <div
+                    className="flex items-center gap-2 text-sm"
+                    style={{ color: "var(--success-green)" }}
+                  >
                     <CheckCircle2 className="w-4 h-4" />
                     All lines above threshold
                   </div>
@@ -408,17 +607,31 @@ export function LiveDashboardPage() {
               ) : (
                 <div className="space-y-2">
                   {predictions.map(pred => (
-                    <div key={pred.line} className="flex items-center justify-between text-sm">
+                    <div
+                      key={pred.line}
+                      className="flex items-center justify-between text-sm"
+                    >
                       <div className="flex items-center gap-2">
-                        {pred.will_meet_plan
-                          ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: "var(--success-green)" }} />
-                          : <TrendingDown className="w-4 h-4 flex-shrink-0" style={{ color: "var(--error-red)" }} />
-                        }
+                        {pred.will_meet_plan ? (
+                          <CheckCircle2
+                            className="w-4 h-4 flex-shrink-0"
+                            style={{ color: "var(--success-green)" }}
+                          />
+                        ) : (
+                          <TrendingDown
+                            className="w-4 h-4 flex-shrink-0"
+                            style={{ color: "var(--error-red)" }}
+                          />
+                        )}
                         <span className="font-medium">{pred.line}</span>
                       </div>
                       <span
                         className="text-xs font-medium"
-                        style={{ color: pred.will_meet_plan ? "var(--success-green)" : "var(--error-red)" }}
+                        style={{
+                          color: pred.will_meet_plan
+                            ? "var(--success-green)"
+                            : "var(--error-red)",
+                        }}
                       >
                         {pred.will_meet_plan ? "On Track" : "At Risk"}
                       </span>
@@ -440,8 +653,8 @@ export function LiveDashboardPage() {
                   Export CSV
                 </button>
                 <button
+                  onClick={handleExportPDF}
                   className="w-full py-3 rounded-lg border border-border hover:bg-accent transition-colors flex items-center justify-center gap-2 font-medium"
-                  onClick={() => alert("PDF export coming in Week 6")}
                 >
                   <Download className="w-4 h-4" />
                   Export PDF
@@ -449,13 +662,14 @@ export function LiveDashboardPage() {
                 <button
                   onClick={handleShiftSummary}
                   className="w-full py-3 rounded-lg text-white transition-all hover:opacity-90 flex items-center justify-center gap-2 font-medium shadow-md"
-                  style={{ background: "var(--gradient-warm)" }}
+                  style={{ background: "#A50034"}}
                 >
                   <FileText className="w-4 h-4" />
                   Shift Summary
                 </button>
               </div>
             </div>
+
           </div>
         </div>
       </div>

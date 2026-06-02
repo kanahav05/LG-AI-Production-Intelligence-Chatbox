@@ -37,7 +37,7 @@ export function MainDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={{background: "#F5F3EF"}}>
       <Header/>
 
       <div className="p-6">
@@ -47,7 +47,7 @@ export function MainDashboard() {
           <div className="rounded-2xl p-8 border border-border bg-gradient-to-br from-card to-accent shadow-lg">
             <div className="flex items-start gap-4 mb-6">
               <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-md"
-                style={{ background: "var(--gradient-warm)" }}>
+                style={{ background: "#A50034" }}>
                 <MessageSquare className="w-7 h-7 text-white" />
               </div>
               <div className="flex-1">
@@ -69,7 +69,7 @@ export function MainDashboard() {
                 "Multi-modal input: text, voice, and files"
               ].map(f => (
                 <div key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="w-2 h-2 rounded-full" style={{ background: "var(--lg-orange)" }} />
+                  <div className="w-2 h-2 rounded-full" style={{ background: "#A50034" }} />
                   <span>{f}</span>
                 </div>
               ))}
@@ -77,7 +77,7 @@ export function MainDashboard() {
             <button
               onClick={() => navigate("/chatbox")}
               className="w-full py-3 rounded-xl text-white font-medium transition-all hover:opacity-90 shadow-lg"
-              style={{ background: "var(--gradient-warm)" }}
+              style={{ background: "linear-gradient(135deg,#A50034 0%,#C2185B 100%)" }}
             >
               Open Chatbox
             </button>
@@ -91,7 +91,7 @@ export function MainDashboard() {
                 <h2 className="text-xl font-bold text-foreground">Live Line Performance</h2>
               </div>
               <span className="px-3 py-1 rounded-full text-xs font-medium text-white animate-pulse"
-                style={{ background: "var(--gradient-cool)" }}>
+                style={{ background: "#A50034" }}>
                 LIVE
               </span>
             </div>
@@ -105,7 +105,7 @@ export function MainDashboard() {
                       ? "text-white shadow-md"
                       : "bg-accent text-foreground hover:bg-muted"
                   }`}
-                  style={selectedFilter === filter ? { background: "var(--gradient-warm)" } : {}}>
+                  style={selectedFilter === filter ? { background: "#A50034" } : {}}>
                   {filter}
                 </button>
               ))}
@@ -124,7 +124,7 @@ export function MainDashboard() {
                       <div className="flex items-center gap-3">
                         <span className="font-medium text-foreground">{row.line}</span>
                         <span className="px-2 py-1 rounded text-xs font-medium"
-                          style={{ background: "var(--accent)", color: "var(--lg-orange)" }}>
+                          style={{ background: "#FAF0F4", color: "#A50034" }}>
                           {row.product}
                         </span>
                       </div>
@@ -157,7 +157,7 @@ export function MainDashboard() {
 
             <button onClick={() => navigate("/live-dashboard")}
               className="w-full py-3 rounded-xl border-2 font-medium transition-all hover:bg-accent"
-              style={{ borderColor: "var(--lg-orange)", color: "var(--lg-orange)" }}>
+              style={{ borderColor: "#A50034", color: "#A50034" }}>
               Show More Details
             </button>
           </div>

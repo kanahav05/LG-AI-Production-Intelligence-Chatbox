@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Bell, Moon, Sun, User, LogOut, LayoutDashboard, MessageSquare, Activity } from 'lucide-react'
+import { Bell, User, LogOut, LayoutDashboard, MessageSquare, Activity } from 'lucide-react'
 
 interface Alert {
   line: string
@@ -29,7 +29,6 @@ function getCurrentShift(): string {
 
 export function Header({ alerts = [] }: HeaderProps) {
   const [time, setTime]       = useState(new Date())
-  const [dark, setDark]       = useState(false)
   const [showUser, setShowUser] = useState(false)
   const [showBell, setShowBell] = useState(false)
   const navigate  = useNavigate()
@@ -41,10 +40,6 @@ export function Header({ alerts = [] }: HeaderProps) {
     return () => clearInterval(t)
   }, [])
 
-  // Dark mode
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-  }, [dark])
 
   const user = JSON.parse(localStorage.getItem('lg-user') || '{"name":"User"}')
 
@@ -114,7 +109,7 @@ export function Header({ alerts = [] }: HeaderProps) {
         {/* Center — Shift + Date/Time */}
         <div className="hidden lg:flex flex-col items-center">
           <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white mb-0.5"
-                style={{ background: 'var(--lg-orange)' }}>
+                style={{ background: "#A50034"  }}>
             {getCurrentShift()}
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -125,13 +120,6 @@ export function Header({ alerts = [] }: HeaderProps) {
         {/* Right — Actions */}
         <div className="flex items-center gap-2">
 
-          {/* Dark mode toggle */}
-          <button
-            onClick={() => setDark(!dark)}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          >
-            {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
 
           {/* Bell */}
           <div className="relative">
