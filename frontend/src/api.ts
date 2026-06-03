@@ -141,6 +141,40 @@ export async function sendChatQuery(
   return res.json();
 }
 
+export interface TroubleshootMatchManual {
+  id: number;
+  problem: string;
+  manual_solution: string;
+  category: string;
+}
+
+export interface TroubleshootMatchHistory {
+  id: number;
+  problem: string;
+  action_taken: string;
+  outcome: string;
+  date: string;
+}
+
+export interface TroubleshootResponse {
+  response: string;
+  manual_matches: TroubleshootMatchManual[];
+  history_matches: TroubleshootMatchHistory[];
+  synthesized: boolean;
+}
+
+export async function sendTroubleshootQuery(
+  problem: string
+): Promise<TroubleshootResponse> {
+  const res = await fetch(`${BASE_URL}/api/troubleshoot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ problem }),
+  });
+  if (!res.ok) throw new Error("Failed to send troubleshoot query");
+  return res.json();
+}
+
 // WebSocket live stream 
 // Connects to /ws/live and calls callbacks every second.
 // Returns a stop() function to disconnect cleanly.

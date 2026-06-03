@@ -140,30 +140,70 @@ def get_line_metrics_at(line, date_str, time_str):
         "below_threshold": achieve < ACHIEVE_THRESHOLD and target > 0,
     }
 
+def get_previous_working_day(date_str):
+    from datetime import datetime, timedelta
+    date = datetime.strptime(date_str, "%Y-%m-%d")
+    while True:
+        date -= timedelta(days=1)
+        if date.weekday() < 5:  # Monday to Friday
+            return date.strftime("%Y-%m-%d")
+
 # Full snapshot
 def get_database_snapshot(date_str, time_str):
-    """Returns all 13 lines + summary row for a given moment."""
+    """Returns all 13 lines + summary row for a given moment with anomaly checking."""
     rows         = []
     total_plan   = 0
     total_target = 0
     total_result = 0
     alerts       = []
 
+    prev_date = get_previous_working_day(date_str)
+
     for prod_id, prod_data in PRODUCTS.items():
         for line in prod_data["lines"]:
             m = get_line_metrics_at(line, date_str, time_str)
             if not m:
                 continue
+            
+            # Fetch previous working day's metrics at the same time
+            prev_m = get_line_metrics_at(line, prev_date, time_str)
+            
+            # Check drop condition
+            drop_alert = False
+            drop_pct = 0.0
+            if prev_m and prev_m["result"] > 0:
+                drop_pct = (prev_m["result"] - m["result"]) / prev_m["result"] * 100
+                if drop_pct > 15:
+                    drop_alert = True
+            
+            # Decide alert and reason
+            reasons = []
+            if m["below_threshold"]:
+                reasons.append(f"Achieve % is {m['achieve']:.1f}% (below 80% threshold).")
+            if drop_alert:
+                reasons.append(f"Result dropped by {drop_pct:.1f}% compared to same time on previous working day ({prev_m['result']} vs {m['result']}).")
+                
+            is_anomaly = m["below_threshold"] or drop_alert
+            
+            if is_anomaly:
+                reason_str = " ".join(reasons)
+                alerts.append({
+                    "line":    line,
+                    "product": prod_id,
+                    "achieve": m["achieve"],
+                    "reason":  reason_str,
+                    "type":    "drop" if drop_alert and not m["below_threshold"] else "threshold" if m["below_threshold"] and not drop_alert else "both"
+                })
+            
+            # Add anomaly indicators to line metrics so frontend can see it
+            m["below_threshold"] = is_anomaly
+            m["anomaly_reason"] = " ".join(reasons) if is_anomaly else ""
+            m["drop_pct"] = round(drop_pct, 1)
+
             rows.append(m)
             total_plan   += m["plan"]
             total_target += m["target"]
             total_result += m["result"]
-            if m["below_threshold"]:
-                alerts.append({
-                    "line":    line,
-                    "product": prod_id,
-                    "achieve": m["achieve"]
-                })
 
     avg_achieve = round(total_result / total_target * 100, 2) if total_target > 0 else 0
 
@@ -179,6 +219,8 @@ def get_database_snapshot(date_str, time_str):
     }
 
     return {"rows": rows, "summary": summary, "alerts": alerts}
+
+
 
 
 if __name__ == "__main__":

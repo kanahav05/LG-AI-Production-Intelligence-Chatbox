@@ -1,36 +1,363 @@
+/* ==========================================================
+   LG PREMIUM SYSTEM THEME (Website Inspired)
+========================================================== */
+
 :root {
-  /* LG Brand */
+  /* ---------- BRAND ---------- */
+
   --lg-red: #A50034;
+  --lg-red-hover: #8C002D;
+  --lg-red-soft: #F8E8EE;
 
-  /* Backgrounds */
+  --lg-charcoal: #2B2B2B;
+  --lg-dark: #1F1F1F;
+
+  /* ---------- BACKGROUND ---------- */
+
   --background: #F5F3EF;
+  --background-elevated: #FBFAF7;
+  --background-soft: #EFEAE2;
+
   --card: #FFFFFF;
+  --card-secondary: #FCFAF7;
 
-  /* Text */
-  --foreground: #333333;
-  --muted-foreground: #666666;
+  /* ---------- TEXT ---------- */
 
-  /* Borders */
-  --border: #E5E5E5;
+  --foreground: #2D2D2D;
+  --foreground-soft: #595959;
 
-  /* Accent */
-  --accent: #FAF0F4;
+  --muted-foreground: #777777;
+  --muted-light: #A3A3A3;
 
-  /* Status */
-  --success-green: #16A34A;
+  /* ---------- BORDERS ---------- */
+
+  --border: #E7E1D8;
+  --border-hover: #D9D0C5;
+
+  /* ---------- SURFACE ---------- */
+
+  --accent: #F9F5F2;
+
+  /* ---------- STATUS ---------- */
+
+  --success-green: #0D9F6E;
   --warning-yellow: #D97706;
-  --error-red: #DC2626;
+  --error-red: #D03B45;
 
-  /* LG Theme Gradients */
-  --gradient-primary: linear-gradient(
-    135deg,
-    #A50034 0%,
-    #C2185B 100%
-  );
+  /* ---------- SHADOW ---------- */
 
-  --gradient-light: linear-gradient(
-    135deg,
-    #FAF0F4 0%,
-    #FFFFFF 100%
-  );
+  --shadow-xs:
+    0 1px 2px rgba(0,0,0,.03);
+
+  --shadow-sm:
+    0 2px 10px rgba(0,0,0,.04);
+
+  --shadow-md:
+    0 10px 30px rgba(0,0,0,.06);
+
+  --shadow-lg:
+    0 18px 50px rgba(0,0,0,.08);
+
+  /* ---------- GRADIENT ---------- */
+
+  --gradient-primary:
+    linear-gradient(
+      135deg,
+      #A50034 0%,
+      #C2185B 100%
+    );
+
+  --gradient-light:
+    linear-gradient(
+      180deg,
+      #FBFAF7 0%,
+      #F4F0EA 100%
+    );
+
+  --gradient-surface:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.95),
+      rgba(255,255,255,.88)
+    );
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+
+  --transition:
+    all .22s cubic-bezier(.4,0,.2,1);
+}
+
+/* ==========================================================
+   DARK MODE
+========================================================== */
+
+.dark {
+  --background: #131313;
+
+  --background-elevated: #181818;
+
+  --background-soft: #1D1D1D;
+
+  --card: #1E1E1E;
+
+  --card-secondary: #252525;
+
+  --foreground: #F7F5F1;
+
+  --foreground-soft: #DDDDDD;
+
+  --muted-foreground: #9A9A9A;
+
+  --border: #2B2B2B;
+
+  --accent: #242424;
+
+  --shadow-md:
+    0 12px 40px rgba(0,0,0,.35);
+}
+
+/* ==========================================================
+   TYPOGRAPHY
+========================================================== */
+
+html {
+  font-family:
+    Inter,
+    "SF Pro Display",
+    system-ui,
+    sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background:
+    linear-gradient(
+      180deg,
+      #F8F6F2 0%,
+      #F4F0EA 100%
+    );
+
+  color: var(--foreground);
+
+  letter-spacing: -.01em;
+}
+
+/* ==========================================================
+   PREMIUM PANELS
+========================================================== */
+
+.dashboard-shell {
+  background:
+    linear-gradient(
+      180deg,
+      #F8F6F2,
+      #F3EFE8
+    );
+}
+
+.sidebar {
+  background:
+    rgba(255,255,255,.72);
+
+  backdrop-filter: blur(24px);
+
+  border-right:
+    1px solid var(--border);
+
+  box-shadow:
+    var(--shadow-sm);
+}
+
+.workspace {
+  background:
+    var(--background);
+}
+
+/* ==========================================================
+   CARD SYSTEM
+========================================================== */
+
+.card-premium {
+
+  background:
+    var(--gradient-surface);
+
+  border:
+    1px solid var(--border);
+
+  border-radius:
+    var(--radius-lg);
+
+  box-shadow:
+    var(--shadow-sm);
+
+  transition:
+    var(--transition);
+}
+
+.card-premium:hover {
+
+  transform:
+    translateY(-2px);
+
+  box-shadow:
+    var(--shadow-md);
+
+  border-color:
+    var(--border-hover);
+}
+
+/* ==========================================================
+   BUTTONS
+========================================================== */
+
+.btn-primary {
+
+  background:
+    var(--gradient-primary);
+
+  color: white;
+
+  border-radius:
+    14px;
+
+  font-weight: 600;
+
+  box-shadow:
+    0 8px 24px rgba(165,0,52,.18);
+
+  transition:
+    var(--transition);
+}
+
+.btn-primary:hover {
+
+  transform:
+    translateY(-1px);
+
+  filter:
+    brightness(.98);
+}
+
+.btn-secondary {
+
+  background:
+    white;
+
+  color:
+    var(--foreground);
+
+  border:
+    1px solid var(--border);
+
+  border-radius:
+    14px;
+
+  transition:
+    var(--transition);
+}
+
+.btn-secondary:hover {
+
+  background:
+    #F9F7F3;
+}
+
+/* ==========================================================
+   CHAT BUBBLES
+========================================================== */
+
+.chat-user {
+
+  background:
+    linear-gradient(
+      135deg,
+      #A50034,
+      #BE2A63
+    );
+
+  color:
+    white;
+
+  border-radius:
+    22px 22px 8px 22px;
+
+  box-shadow:
+    0 10px 24px rgba(165,0,52,.18);
+}
+
+.chat-ai {
+
+  background:
+    rgba(255,255,255,.92);
+
+  border:
+    1px solid var(--border);
+
+  border-radius:
+    22px 22px 22px 8px;
+
+  box-shadow:
+    var(--shadow-sm);
+}
+
+/* ==========================================================
+   INPUTS
+========================================================== */
+
+textarea,
+input {
+
+  background:
+    rgba(255,255,255,.9);
+
+  border:
+    1px solid var(--border);
+
+  border-radius:
+    16px;
+
+  transition:
+    var(--transition);
+
+  color:
+    var(--foreground);
+}
+
+textarea:focus,
+input:focus {
+
+  border-color:
+    var(--lg-red);
+
+  box-shadow:
+    0 0 0 4px rgba(165,0,52,.08);
+}
+
+/* ==========================================================
+   SCROLLBAR
+========================================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+
+  background:
+    rgba(165,0,52,.16);
+
+  border-radius:
+    999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+
+  background:
+    rgba(165,0,52,.28);
 }

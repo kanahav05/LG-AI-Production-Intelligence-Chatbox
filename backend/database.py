@@ -18,7 +18,7 @@ def get_connection():
 
 # Table creation
 def init_db():
-    """Creates the production_history table if it doesn't exist."""
+    """Creates the production_history and troubleshooting tables if they don't exist."""
     conn = get_connection()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS production_history (
@@ -49,9 +49,121 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_date_phase
         ON production_history (date, phase)
     """)
+
+    # Troubleshooting tables
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS problem_library (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            problem         TEXT    NOT NULL,
+            manual_solution TEXT    NOT NULL,
+            category        TEXT    NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS resolution_history (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            problem         TEXT    NOT NULL,
+            action_taken    TEXT    NOT NULL,
+            outcome         TEXT    NOT NULL,
+            date            TEXT    NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
+    
+    # Seed troubleshooting database
+    seed_troubleshooting_tables()
     print(f"Database initialised at {DB_PATH}")
+
+def seed_troubleshooting_tables():
+    PROBLEMS = [
+        {"problem": "R1 line conveyor motor overheating", "manual_solution": "Shut down line R1, check cooling fan vents for debris, allow 15 minutes to cool, verify voltage supply is 220V.", "category": "REF"},
+        {"problem": "PCB01 soldering machine nozzle clog", "manual_solution": "Run auto-clean cycle on soldering head. If it fails, manual clean with isopropyl alcohol and re-calibrate nozzle height.", "category": "REF"},
+        {"problem": "R2 compressor assembly alignment error", "manual_solution": "Check pneumatic clamps alignment, recalibrate the optical sensor on station 4, reset assembly robot arm.", "category": "REF"},
+        {"problem": "W1 tub balance test failure rate high", "manual_solution": "Inspect shock absorbers on drum assembly station, verify suspension springs are engaged, calibrate digital balance sensors.", "category": "WMC"},
+        {"problem": "PCB04 circuit programmer failure", "manual_solution": "Reboot programming terminal, verify ethernet connection to mainframe, check firmware version mismatch.", "category": "WMC"},
+        {"problem": "CM1 helium leak detector false alarms", "manual_solution": "Purge testing chamber, inspect vacuum chamber seals, recalibrate mass spectrometer sensor using standard reference gas.", "category": "COMP"},
+        {"problem": "CM2 housing press tonnage low", "manual_solution": "Verify hydraulic fluid levels, check pressure regulator valve settings, inspect cylinder for fluid bypass.", "category": "COMP"},
+        {"problem": "A1 copper pipe bender kinking", "manual_solution": "Replace bending mandrel, inspect hydraulic bending arm speed, check copper tube wall thickness specifications.", "category": "RAC"},
+        {"problem": "PCB02 SMT placement offsets", "manual_solution": "Clean vision system camera lens, re-run PCB fiducial recognition calibration, verify tape feeder alignment.", "category": "RAC"},
+        {"problem": "WP1 filter housing torque out of range", "manual_solution": "Clean capping chuck threads, check pneumatic supply pressure, verify filter o-ring lubricant application.", "category": "A08"}
+    ]
+    
+    RESOLUTIONS = [
+        {"problem": "Line R1 motor temperature warning active", "action_taken": "Cleaned debris from cooling fan, verified voltage stability.", "outcome": "Resolved. Temperature stabilized to 45C.", "date": "2026-05-15"},
+        {"problem": "PCB01 nozzle clogging frequently", "action_taken": "Cleaned manually with IPA, re-calibrated nozzle height.", "outcome": "Resolved. Solder flow rate returned to normal.", "date": "2026-05-18"},
+        {"problem": "W1 imbalance testing failures on shifts", "action_taken": "Adjusted drum alignment clamps, replaced one faulty suspension spring.", "outcome": "Resolved. Failure rate dropped below 1%.", "date": "2026-05-20"},
+        {"problem": "WP1 filter capping torque low", "action_taken": "Adjusted pressure to 6.2 bar, applied food-grade silicone grease to o-ring.", "outcome": "Resolved. Torque values verified within 3.2-3.6 Nm.", "date": "2026-05-22"}
+    ]
+
+    conn = get_connection()
+    # Check if problems are already seeded
+    p_count = conn.execute("SELECT COUNT(*) FROM problem_library").fetchone()[0]
+    if p_count == 0:
+        conn.executemany("""
+            INSERT INTO problem_library (problem, manual_solution, category)
+            VALUES (:problem, :manual_solution, :category)
+        """, PROBLEMS)
+    
+    r_count = conn.execute("SELECT COUNT(*) FROM resolution_history").fetchone()[0]
+    if r_count == 0:
+        conn.executemany("""
+            INSERT INTO resolution_history (problem, action_taken, outcome, date)
+            VALUES (:problem, :action_taken, :outcome, :date)
+        """, RESOLUTIONS)
+        
+    conn.commit()
+    conn.close()
+
+def query_problem_library(query: str) -> list[dict]:
+    conn = get_connection()
+    words = [f"%{w}%" for w in query.split() if len(w) > 2]
+    if not words:
+        words = [f"%{query}%"]
+        
+    conditions = []
+    params = []
+    for w in words:
+        conditions.append("(problem LIKE ? OR category LIKE ?)")
+        params.extend([w, w])
+        
+    if not conditions:
+        conn.close()
+        return []
+        
+    where_clause = " OR ".join(conditions)
+    rows = conn.execute(f"""
+        SELECT * FROM problem_library
+        WHERE {where_clause}
+        LIMIT 5
+    """, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def query_resolution_history(query: str) -> list[dict]:
+    conn = get_connection()
+    words = [f"%{w}%" for w in query.split() if len(w) > 2]
+    if not words:
+        words = [f"%{query}%"]
+        
+    conditions = []
+    params = []
+    for w in words:
+        conditions.append("(problem LIKE ? OR action_taken LIKE ? OR outcome LIKE ?)")
+        params.extend([w, w, w])
+        
+    if not conditions:
+        conn.close()
+        return []
+        
+    where_clause = " OR ".join(conditions)
+    rows = conn.execute(f"""
+        SELECT * FROM resolution_history
+        WHERE {where_clause}
+        LIMIT 5
+    """, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 # Bulk insert 
 def insert_records(records: list[dict]):

@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Header } from "./Header";
-import { MessageSquare, TrendingUp } from "lucide-react";
+import {
+  MessageSquare,
+  TrendingUp,
+  CheckCircle2,
+  AlertTriangle,
+  Activity,
+  Wrench,
+  ArrowRight,
+} from "lucide-react";
 import { fetchLive, connectLiveStream, LiveSnapshot } from "../../api";
 
 const productFilters = ["All", "REF", "WMC", "COMP", "RAC", "A08"];
@@ -36,131 +44,284 @@ export function MainDashboard() {
     return "var(--error-red)";
   };
 
+  /* ── KPI data ── */
+  const totalPlan = liveData?.summary.plan ?? 0;
+  const totalResult = liveData?.summary.result ?? 0;
+  const avgAchieve = liveData?.summary.achieve ?? 0;
+  const alertCount = liveData?.alerts.length ?? 0;
+
+  const kpis = [
+    {
+      label: "Total Plan",
+      value: totalPlan.toLocaleString(),
+      sub: "units today",
+      icon: TrendingUp,
+      color: "var(--lg-red)",
+      bg: "rgba(165, 0, 52, 0.08)",
+    },
+    {
+      label: "Total Result",
+      value: totalResult.toLocaleString(),
+      sub: "units so far",
+      icon: TrendingUp,
+      color: "var(--success-green)",
+      bg: "rgba(22, 163, 74, 0.08)",
+    },
+    {
+      label: "Avg Achievement",
+      value: `${avgAchieve.toFixed(1)}%`,
+      sub: avgAchieve >= 90 ? "on track" : avgAchieve >= 80 ? "needs attention" : "below target",
+      icon: CheckCircle2,
+      color: getAchieveColor(avgAchieve),
+      bg:
+        avgAchieve >= 90
+          ? "rgba(22, 163, 74, 0.08)"
+          : avgAchieve >= 80
+          ? "rgba(217, 119, 6, 0.08)"
+          : "rgba(220, 38, 38, 0.08)",
+    },
+    {
+      label: "Active Alerts",
+      value: alertCount.toString(),
+      sub: alertCount === 0 ? "all clear" : `line${alertCount > 1 ? "s" : ""} below threshold`,
+      icon: AlertTriangle,
+      color: "var(--error-red)",
+      bg: "rgba(220, 38, 38, 0.08)",
+    },
+  ];
+
+  /* ── Quick‑action cards ── */
+  const actions = [
+    {
+      title: "AI Production Assistant",
+      desc: "Ask questions, get insights, and analyze production data using natural language.",
+      icon: MessageSquare,
+      onClick: () => navigate("/chatbox"),
+      cta: "Open Chatbox",
+    },
+    {
+      title: "Live Production Dashboard",
+      desc: "Monitor every line in real time with predictions and alerts.",
+      icon: Activity,
+      onClick: () => navigate("/live-dashboard"),
+      cta: "View Dashboard",
+    },
+    {
+      title: "Equipment Diagnostics",
+      desc: "Troubleshoot issues with AI-powered diagnostics and maintenance guides.",
+      icon: Wrench,
+      onClick: () => navigate("/chatbox"),
+      cta: "Run Diagnostics",
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-background" style={{background: "#F5F3EF"}}>
-      <Header/>
+    <div className="min-h-screen dashboard-shell">
+      <Header />
 
-      <div className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="max-w-[1440px] mx-auto px-6 py-8 space-y-8">
 
-          {/* Left — Chatbox description */}
-          <div className="rounded-2xl p-8 border border-border bg-gradient-to-br from-card to-accent shadow-lg">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-md"
-                style={{ background: "#A50034" }}>
-                <MessageSquare className="w-7 h-7 text-white" />
+        {/* ═══ KPI Summary Row ═══ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {kpis.map((kpi, i) => (
+            <div
+              key={kpi.label}
+              className="card-premium p-6 flex items-start gap-4"
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              {/* icon circle */}
+              <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center"
+              style={{
+                background: kpi.bg,
+                boxShadow: "var(--shadow-xs)"
+                }}
+                >
+                <kpi.icon className="w-6 h-6" style={{ color: kpi.color }} />
               </div>
-              <div className="flex-1">
-                <h2 className="text-2xl font-bold text-foreground mb-2">
-                  AI Production Assistant
-                </h2>
-                <p className="text-muted-foreground">
-                  Ask questions about production data, get insights on line
-                  performance, predict outcomes, and analyze trends using
-                  natural language, voice, or file upload.
+
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide"
+                  style={{ color: "var(--muted-foreground)" }}>
+                  {kpi.label}
+                </p>
+                <p className="text-3xl font-bold tracking-tight"
+                  style={{ color: "var(--foreground)", animationDelay: `${i * 80 + 200}ms` }}>
+                  {loading ? "—" : kpi.value}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                  {kpi.sub}
                 </p>
               </div>
             </div>
-            <div className="space-y-3 mb-6">
-              {[
-                "Real-time production data analysis",
-                "Natural language query support",
-                "Predictive performance insights",
-                "Multi-modal input: text, voice, and files"
-              ].map(f => (
-                <div key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="w-2 h-2 rounded-full" style={{ background: "#A50034" }} />
-                  <span>{f}</span>
+          ))}
+        </div>
+
+        {/* ═══ Quick Action Cards ═══ */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {actions.map((a, i) => (
+            <div
+              key={a.title}
+              className="card-premium p-6 flex flex-col justify-between min-h-[250px]"
+            >
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center"
+                    style={{
+                      background: "rgba(165, 0, 52, 0.08)",
+                    }}
+                  >
+                    <a.icon
+                      className="w-5 h-5"
+                      style={{ color: "var(--lg-red)" }}
+                    />
+                  </div>
+                  <h3
+                    className="text-lg font-bold"
+                    style={{ color: "var(--foreground)" }}
+                  >
+                    {a.title}
+                  </h3>
+                </div>
+                <p
+                  className="text-sm leading-relaxed mb-5"
+                  style={{
+                    color: "var(--muted-foreground)",
+                  }}
+                >
+                  {a.desc}
+                </p>
+              </div>
+
+              <button
+                onClick={a.onClick}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+                style={{
+                  border: "2px solid var(--lg-red)",
+                  color: "var(--lg-red)",
+                   background: "transparent",
+                  }}
+              >
+                {a.cta}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* ═══ Live Line Performance Grid ═══ */}
+        <div
+          className="card-premium p-8"
+          style={{ animationDelay: "640ms" }}
+        >
+          {/* header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-6 h-6" style={{ color: "var(--lg-red)" }} />
+              <h2 className="text-xl font-bold" style={{ color: "var(--foreground)" }}>
+                Live Line Performance
+              </h2>
+            </div>
+            <span
+              className="px-3 py-1 rounded-full text-xs font-medium text-white animate-pulse"
+              style={{ background: "#A50034" }}
+            >
+              LIVE
+            </span>
+          </div>
+
+          {/* Filter pills */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            {productFilters.map(filter => (
+              <button
+                key={filter}
+                onClick={() => setSelectedFilter(filter)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  selectedFilter === filter
+                    ? "text-white shadow-md"
+                    : "bg-accent text-foreground hover:bg-muted"
+                }`}
+                style={selectedFilter === filter ? { background: "#A50034" } : {}}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+
+          {/* Line rows */}
+          {loading ? (
+            <div className="text-center py-12" style={{ color: "var(--muted-foreground)" }}>
+              <Activity className="w-8 h-8 mx-auto mb-3 animate-pulse" style={{ color: "var(--lg-red)" }} />
+              <p className="font-medium">Connecting to live data…</p>
+            </div>
+          ) : filteredRows.length === 0 ? (
+            <div className="text-center py-12" style={{ color: "var(--muted-foreground)" }}>
+              <p className="font-medium">No lines match the selected filter.</p>
+            </div>
+          ) : (
+            <div className="space-y-4 mb-6">
+              {filteredRows.map((row, idx) => (
+                <div
+                  key={row.line}
+                  className="animate-fadeInUp space-y-2"
+                  style={{ animationDelay: `${idx * 40}ms` }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium" style={{ color: "var(--foreground)" }}>
+                        {row.line}
+                      </span>
+                      <span
+                        className="px-2 py-0.5 rounded text-xs font-semibold"
+                        style={{ background: "var(--accent)", color: "var(--lg-red)" }}
+                      >
+                        {row.product}
+                      </span>
+                    </div>
+                    <span className="font-bold text-sm" style={{ color: getAchieveColor(row.achieve) }}>
+                      {row.achieve.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <div className="relative h-3 rounded-full overflow-hidden" style={{ background:  "var(--background-soft)"}}>
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full transition-all duration-700"
+                      style={{
+                        width: `${Math.min(row.achieve, 100)}%`,
+                        background: getAchieveColor(row.achieve),
+                      }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => navigate("/chatbox")}
-              className="w-full py-3 rounded-xl text-white font-medium transition-all hover:opacity-90 shadow-lg"
-              style={{ background: "linear-gradient(135deg,#A50034 0%,#C2185B 100%)" }}
-            >
-              Open Chatbox
-            </button>
-          </div>
+          )}
 
-          {/* Right — Live line grid */}
-          <div className="rounded-2xl p-6 border border-border bg-card shadow-lg">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="w-6 h-6" style={{ color: "var(--lg-orange)" }} />
-                <h2 className="text-xl font-bold text-foreground">Live Line Performance</h2>
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-medium text-white animate-pulse"
-                style={{ background: "#A50034" }}>
-                LIVE
+          {/* Summary row */}
+          {liveData && (
+            <div
+              className="flex items-center justify-between text-xs px-1 mb-4"
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              <span>
+                Showing {filteredRows.length} of {liveData.rows.length} lines
+              </span>
+              <span>
+                Factory avg: {liveData.summary.achieve.toFixed(1)}%
+                {liveData.alerts.length > 0
+                  ? ` · ⚠ ${liveData.alerts.length} alert${liveData.alerts.length > 1 ? "s" : ""}`
+                  : " · ✓ All lines on track"}
               </span>
             </div>
+          )}
 
-            {/* Filter pills */}
-            <div className="flex flex-wrap gap-2 mb-6">
-              {productFilters.map(filter => (
-                <button key={filter} onClick={() => setSelectedFilter(filter)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    selectedFilter === filter
-                      ? "text-white shadow-md"
-                      : "bg-accent text-foreground hover:bg-muted"
-                  }`}
-                  style={selectedFilter === filter ? { background: "#A50034" } : {}}>
-                  {filter}
-                </button>
-              ))}
-            </div>
-
-            {/* Line rows */}
-            {loading ? (
-              <div className="text-center text-muted-foreground py-8">
-                Connecting to live data...
-              </div>
-            ) : (
-              <div className="space-y-4 mb-6">
-                {filteredRows.slice(0, 6).map(row => (
-                  <div key={row.line} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium text-foreground">{row.line}</span>
-                        <span className="px-2 py-1 rounded text-xs font-medium"
-                          style={{ background: "#FAF0F4", color: "#A50034" }}>
-                          {row.product}
-                        </span>
-                      </div>
-                      <span className="font-bold"
-                        style={{ color: getAchieveColor(row.achieve) }}>
-                        {row.achieve.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="relative h-2 bg-accent rounded-full overflow-hidden">
-                      <div className="absolute top-0 left-0 h-full rounded-full transition-all"
-                        style={{
-                          width: `${Math.min(row.achieve, 100)}%`,
-                          background: getAchieveColor(row.achieve)
-                        }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Summary row */}
-            {liveData && (
-              <div className="text-xs text-muted-foreground mb-4 text-right">
-                Factory avg: {liveData.summary.achieve.toFixed(1)}% |
-                {liveData.alerts.length > 0
-                  ? ` ⚠ ${liveData.alerts.length} line(s) below threshold`
-                  : " ✓ All lines on track"}
-              </div>
-            )}
-
-            <button onClick={() => navigate("/live-dashboard")}
-              className="w-full py-3 rounded-xl border-2 font-medium transition-all hover:bg-accent"
-              style={{ borderColor: "#A50034", color: "#A50034" }}>
-              Show More Details
-            </button>
-          </div>
+          <button
+            onClick={() => navigate("/live-dashboard")}
+            className="btn-secondary w-full py-3 flex items-center justify-center gap-2">
+            Show Full Dashboard
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>

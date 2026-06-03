@@ -5,12 +5,13 @@ import { AIChatboxPage } from "./components/AIChatboxPage";
 import { LiveDashboardPage } from "./components/LiveDashboardPage";
 import { AnomalyAlert, useAnomalyDetection } from "./components/AnomalyAlert";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AlertsContext } from "./alertsContext";
 
 function AppContent() {
   const { alerts, clearAlerts } = useAnomalyDetection();
 
   return (
-    <>
+    <AlertsContext.Provider value={{ alerts, clearAlerts }}>
       <Routes>
         <Route path="/" element={<SignInPage />} />
         <Route
@@ -43,7 +44,7 @@ function AppContent() {
       {alerts.length > 0 && (
         <AnomalyAlert alerts={alerts} onClose={clearAlerts} />
       )}
-    </>
+    </AlertsContext.Provider>
   );
 }
 

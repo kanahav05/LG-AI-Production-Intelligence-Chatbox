@@ -173,7 +173,7 @@ def rag_retrieve(
     return {"rows": rows, "context": context, "count": len(rows)}
 
 # Chat endpoint
-from rag import process_chat
+from rag import process_chat, process_troubleshoot
 @app.post("/api/chat")
 def chat(body: dict):
     """
@@ -188,6 +188,20 @@ def chat(body: dict):
         return {"error": "Query cannot be empty"}
 
     result = process_chat(query, history)
+    return result
+
+@app.post("/api/troubleshoot")
+def troubleshoot(body: dict):
+    """
+    Troubleshooting RAG endpoint.
+    Accepts problem description.
+    Queries manual + history, returns Gemini synthesized guide.
+    """
+    problem = body.get("problem", "")
+    if not problem.strip():
+        return {"error": "Problem description cannot be empty"}
+
+    result = process_troubleshoot(problem)
     return result
 
 # Predict endpoints

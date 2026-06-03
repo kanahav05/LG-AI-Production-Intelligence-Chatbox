@@ -17,7 +17,7 @@ from generator import (
     get_phase_name,
     time_str_to_minutes
 )
-from database import query_for_rag, query_day_summary
+from database import query_for_rag, query_day_summary, query_problem_library, query_resolution_history
 
 # Setup
 load_dotenv()
@@ -211,6 +211,73 @@ def process_chat(query_str, history=None):
     return {
         "response": call_gemini(query_str, context, history, params["is_detailed"]),
         "params": params, "rows_used": len(rows), "is_live": params["is_current_time"], "intent": params["intent"]
+    }
+
+def process_troubleshoot(problem_desc: str):
+    """
+    RAG troubleshooting engine.
+    Queries problem_library and resolution_history.
+    If no match found, returns "Contact your LG supervisor immediately."
+    Otherwise, synthesises a clear response using Gemini.
+    """
+    # Search manual and history
+    manual_matches = query_problem_library(problem_desc)
+    history_matches = query_resolution_history(problem_desc)
+    
+    if not manual_matches and not history_matches:
+        return {
+            "response": "No matching troubleshooting guides or historical resolutions were found for this issue in the LG database. **Contact your LG supervisor immediately.**",
+            "manual_matches": [],
+            "history_matches": [],
+            "synthesized": False
+        }
+        
+    # Format context
+    manual_context = ""
+    if manual_matches:
+        manual_context = "OFFICIAL LG MANUAL GUIDES:\n"
+        for idx, item in enumerate(manual_matches, 1):
+            manual_context += f"{idx}. Category: {item['category']} | Problem: {item['problem']}\n   Official Solution: {item['manual_solution']}\n"
+            
+    history_context = ""
+    if history_matches:
+        history_context = "HISTORICAL RESOLUTIONS:\n"
+        for idx, item in enumerate(history_matches, 1):
+            history_context += f"{idx}. Problem: {item['problem']}\n   Action Taken: {item['action_taken']}\n   Outcome: {item['outcome']} (Date: {item['date']})\n"
+            
+    prompt = f"""
+You are an expert LG Factory Troubleshooting Assistant.
+A user reported the following operational issue on the factory floor:
+"{problem_desc}"
+
+Here is the information retrieved from our official LG Troubleshooting Manual and historical resolution logs:
+
+{manual_context}
+
+{history_context}
+
+INSTRUCTIONS:
+1. If the user's reported problem is completely unrelated to LG factory operations, machinery, or the production lines mentioned in the manual, ignore the manual/history matches and reply EXACTLY: "No matching troubleshooting guides or historical resolutions were found for this issue in the LG database. Contact your LG supervisor immediately."
+2. Otherwise, synthesize both the official manual solutions and past historical action logs into a clear, step-by-step troubleshooting guide.
+3. Be highly professional, direct, and actionable. Number the troubleshooting steps clearly.
+4. Highlight any safety warnings or supervisor contacts if necessary, but prioritize giving the steps to resolve the issue.
+
+Synthesized Troubleshooting Guide:
+""".strip()
+
+    try:
+        response_text = get_client().models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt
+        ).text.strip()
+    except Exception as e:
+        response_text = f"Error generating troubleshooting response: {str(e)}"
+        
+    return {
+        "response": response_text,
+        "manual_matches": manual_matches,
+        "history_matches": history_matches,
+        "synthesized": True
     }
 
 
