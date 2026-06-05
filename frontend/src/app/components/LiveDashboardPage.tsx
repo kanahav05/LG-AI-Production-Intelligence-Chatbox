@@ -363,7 +363,7 @@ export function LiveDashboardPage() {
                   data={liveData.rows.map(r => ({
                     line:    r.line,
                     Achieve: parseFloat(r.achieve.toFixed(1)),
-                    Target:  80,
+                    Target:  90,
                   }))}
                   margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
                 >
@@ -400,7 +400,7 @@ export function LiveDashboardPage() {
                     strokeWidth={1.5}
                     strokeDasharray="5 5"
                     dot={false}
-                    name="80% Threshold"
+                    name="90% Threshold"
                   />
                 </LineChart>
               </ResponsiveContainer>

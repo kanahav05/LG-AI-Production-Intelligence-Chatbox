@@ -78,7 +78,7 @@ const makeWelcome = (): Message => ({
   content:
     "Hello! I am your **LG AI Production Assistant**. I can help you analyse " +
     "live and historical production data, predict line performance, and surface " +
-    "anomaly alerts.\n\nAsk me anything — you can type, use voice, or upload a CSV file.",
+    "anomaly alerts.\n\nAsk me anything - you can type, use voice, or upload a CSV file.",
   timestamp: new Date(),
   isDetailed: true, // no Detail button on welcome
 });
@@ -553,7 +553,7 @@ export function AIChatboxPage() {
 
             {/* Help & Keywords Drawer Trigger */}
             <button
-              onClick={() => setShowHelp(true)}
+              onClick={() => setShowHelp(prev => !prev)}
               className="btn-secondary w-full py-3 rounded-2xl font-semibold transition-all flex items-center justify-center gap-2"
               style={{ color: "var(--lg-red)", borderColor: "var(--border)" }}
             >

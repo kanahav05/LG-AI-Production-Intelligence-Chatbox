@@ -18,7 +18,7 @@ PHASES = [
     {"id": 4, "name": "Evening Shift",       "start": 16*60,   "end": 18*60,   "pct": 0.15},
 ]
 
-ACHIEVE_THRESHOLD = 80
+ACHIEVE_THRESHOLD = 90
 
 # Line → Product lookup
 LINE_TO_PRODUCT = {}

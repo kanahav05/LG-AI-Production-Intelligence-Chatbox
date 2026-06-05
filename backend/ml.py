@@ -188,6 +188,67 @@ def train_models():
         print(f"  {r['line']:<8} {r['samples']:>8} {r['mae']:>8.1f} {r['r2']:>8.3f}")
     print(f"\n  Models trained for {len(results)} lines.")
 
+# ── Recovery suggestion builder ──────────────────────────────
+def _build_recovery_suggestion(
+    line, shortfall, remaining, req_rate, curr_rate,
+    rate_increase_pct, overtime_needed, phase_capacities
+) -> str:
+    """
+    Returns a plain-English recovery suggestion for an at-risk line.
+    Used by both the ML module and the RAG context builder.
+    """
+    parts = []
+    parts.append(
+        f"Line {line} is projected to miss its plan by {shortfall} units "
+        f"with {round(remaining)} active minutes remaining."
+    )
+
+    if curr_rate > 0 and rate_increase_pct is not None:
+        if rate_increase_pct <= 5:
+            parts.append(
+                f"A minor rate increase of {rate_increase_pct:.1f}% "
+                f"(from {curr_rate:.2f} to {req_rate:.2f} units/min) is sufficient to recover."
+            )
+        elif rate_increase_pct <= 20:
+            parts.append(
+                f"A moderate rate increase of {rate_increase_pct:.1f}% is needed "
+                f"({curr_rate:.2f} → {req_rate:.2f} units/min). Consider reducing micro-stoppages "
+                f"or adding one operator to this line."
+            )
+        else:
+            parts.append(
+                f"A significant rate increase of {rate_increase_pct:.1f}% is required — "
+                f"this is unlikely within normal operations. "
+                f"Escalate to the shift supervisor immediately."
+            )
+
+    if overtime_needed is not None:
+        if overtime_needed <= 30:
+            parts.append(
+                f"Alternatively, {overtime_needed} minutes of overtime at the current rate "
+                f"would close the gap."
+            )
+        elif overtime_needed <= 90:
+            parts.append(
+                f"Closing the gap purely via overtime would require ~{overtime_needed} minutes "
+                f"beyond 6:00 PM — feasible only with supervisor approval."
+            )
+        else:
+            parts.append(
+                f"Overtime alone cannot recover this shortfall ({overtime_needed} min needed). "
+                f"Both rate improvement and extended hours are required."
+            )
+
+    if phase_capacities:
+        top_phase, top_mins = phase_capacities[0]
+        parts.append(
+            f"Focus recovery effort in the {top_phase} "
+            f"({top_mins} minutes of active production remaining)."
+        )
+
+    return " ".join(parts)
+
+
 # ── Step 3: Predict one line ──────────────────────────────────
 def predict_line(line, date_str=None, time_str=None):
     """
@@ -263,7 +324,51 @@ def predict_line(line, date_str=None, time_str=None):
 
     will_meet_plan   = projected >= plan
     units_needed     = max(0, plan - result)
+    shortfall        = max(0, plan - projected)
     below_threshold  = achieve < ACHIEVE_THRESHOLD and target > 0
+
+    # ── Recovery suggestions (only when at risk) ──────────────
+    recovery = None
+    if not will_meet_plan and remaining > 0 and shortfall > 0:
+        # Units per minute needed to close gap
+        required_rate_per_min = shortfall / remaining
+        current_rate_per_min  = (result / elapsed) if elapsed > 0 else 0
+        rate_increase_pct     = (
+            ((required_rate_per_min - current_rate_per_min) / current_rate_per_min * 100)
+            if current_rate_per_min > 0 else None
+        )
+
+        # How many extra minutes at current rate would be needed (overtime)
+        overtime_needed = (
+            round(shortfall / current_rate_per_min)
+            if current_rate_per_min > 0 else None
+        )
+
+        # Which remaining shift phase has the most available minutes
+        phase_capacities = []
+        now_mins = mins
+        shift_phases = [
+            ("Afternoon Shift", 14*60, 16*60),
+            ("Evening Shift",   16*60, 18*60),
+        ]
+        for phase_label, p_start, p_end in shift_phases:
+            if now_mins < p_end:
+                available = p_end - max(now_mins, p_start)
+                if available > 0:
+                    phase_capacities.append((phase_label, round(available)))
+
+        recovery = {
+            "shortfall_units":          shortfall,
+            "required_rate_per_min":    round(required_rate_per_min, 2),
+            "current_rate_per_min":     round(current_rate_per_min, 2),
+            "rate_increase_pct_needed": round(rate_increase_pct, 1) if rate_increase_pct is not None else None,
+            "overtime_minutes_needed":  overtime_needed,
+            "remaining_phases":         phase_capacities,
+            "suggestion": _build_recovery_suggestion(
+                line, shortfall, remaining, required_rate_per_min,
+                current_rate_per_min, rate_increase_pct, overtime_needed, phase_capacities
+            )
+        }
 
     return {
         "line":             line,
@@ -278,14 +383,16 @@ def predict_line(line, date_str=None, time_str=None):
         "achieve_pct":      round(achieve, 1),
         "projected_result": projected,
         "will_meet_plan":   will_meet_plan,
+        "shortfall":        shortfall,
         "confidence":       confidence,
         "units_needed":     units_needed,
         "minutes_remaining": round(remaining),
         "below_threshold":  below_threshold,
-        "ml_projected":     ml_projected,      # raw ML output
-        "rate_projected":   rate_projected,    # raw rate output
+        "ml_projected":     ml_projected,
+        "rate_projected":   rate_projected,
         "ml_weight":        round(ml_weight, 2),
-        "rate_weight":      round(rate_weight, 2)
+        "rate_weight":      round(rate_weight, 2),
+        "recovery":         recovery,
     }
 
 # ── Step 4: Predict all lines ─────────────────────────────────

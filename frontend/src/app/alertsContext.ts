@@ -4,17 +4,19 @@ export interface AlertData {
   line: string;
   product: string;
   achieve: number;
-  reason?: string;
-  type?: string;
-  detectedAt?: Date;
+  reason:string;
+  detectedAt: Date;
 }
 
 export interface AlertsContextType {
   alerts: AlertData[];
+  setAlerts: (alerts: AlertData[]) => void; // Add this line
   clearAlerts: () => void;
 }
 
+// Update the default value to include a no-op function for setAlerts
 export const AlertsContext = createContext<AlertsContextType>({
   alerts: [],
+  setAlerts: () => {}, 
   clearAlerts: () => {},
 });

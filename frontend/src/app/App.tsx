@@ -3,15 +3,18 @@ import { SignInPage } from "./components/SignInPage";
 import { MainDashboard } from "./components/MainDashboard";
 import { AIChatboxPage } from "./components/AIChatboxPage";
 import { LiveDashboardPage } from "./components/LiveDashboardPage";
-import { AnomalyAlert, useAnomalyDetection } from "./components/AnomalyAlert";
+import { AnomalyAlert, TestAlertTrigger, useAnomalyDetection } from "./components/AnomalyAlert";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AlertsContext } from "./alertsContext";
 
 function AppContent() {
-  const { alerts, clearAlerts } = useAnomalyDetection();
+  // State lives here — useAnomalyDetection owns its own useState now,
+  // so setAlerts is always the real setter, never a context no-op.
+  const { alerts, setAlerts, clearAlerts } = useAnomalyDetection();
 
   return (
-    <AlertsContext.Provider value={{ alerts, clearAlerts }}>
+    // Provide the real setAlerts down to any child that needs it (e.g. Header bell)
+    <AlertsContext.Provider value={{ alerts, setAlerts, clearAlerts }}>
       <Routes>
         <Route path="/" element={<SignInPage />} />
         <Route
@@ -44,6 +47,10 @@ function AppContent() {
       {alerts.length > 0 && (
         <AnomalyAlert alerts={alerts} onClose={clearAlerts} />
       )}
+
+      {/* Pass the real setAlerts as a prop — no context read inside TestAlertTrigger */}
+      <TestAlertTrigger setAlerts={setAlerts} />
+
     </AlertsContext.Provider>
   );
 }

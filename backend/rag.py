@@ -19,26 +19,26 @@ from generator import (
 )
 from database import query_for_rag, query_day_summary, query_problem_library, query_resolution_history
 
-# Setup
+# Gemini setup 
 load_dotenv()
 load_dotenv(override=True)
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL   = "gemini-2.5-flash"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Initialize the client ONCE at the module level
+# Initialize client once at module level
 _client = genai.Client(api_key=GEMINI_API_KEY)
 
 def get_client():
-    """Returns the persistent client instance."""
+    """Returns the persistent Gemini client instance."""
     return _client
 
-# System prompt 
+# System prompt
 SYSTEM_PROMPT = """
 You are an AI production intelligence assistant for LG Electronics.
 You help plant heads, product managers, and line employees query
-real-time and historical factory production data. Follow all internal rules 
-regarding brief answers and detailed breakdowns.
+real-time and historical factory production data. Follow all internal
+rules regarding brief answers and detailed breakdowns.
 
 FACTORY CONTEXT:
 Products and their production lines:
@@ -70,10 +70,18 @@ RESPONSE RULES:
 5. Be direct and professional — users are factory personnel familiar with these terms.
 6. For predictive queries, base your answer on the projection data provided.
 7. If no relevant data is found, say so clearly and suggest rephrasing.
+8. If a line's result is significantly behind its target or projected to miss
+   its plan, proactively suggest 2-3 practical recovery actions such as:
+   checking for equipment stoppages, increasing production rate, reallocating
+   operators to the underperforming line, or escalating to the shift supervisor
+   if the gap cannot be closed within the remaining shift time.
+9. If no data is found for a date, check if it falls on a weekend
+   (Saturday or Sunday). The factory does not operate on weekends.
+   Clearly inform the user and suggest querying a working day instead.
 """.strip()
 
 
-# Step 1: Query parameter extraction
+# Step 1: Query parameter extraction 
 def extract_query_params(query_str, override_context=None):
     if override_context is None:
         override_context = {}
@@ -81,7 +89,7 @@ def extract_query_params(query_str, override_context=None):
     today = datetime.now()
 
     # Date resolution
-    resolved_date = override_context.get("date", today.strftime("%Y-%m-%d"))
+    resolved_date     = override_context.get("date", today.strftime("%Y-%m-%d"))
     date_was_explicit = "date" in override_context
 
     if "day before yesterday" in q:
@@ -91,28 +99,43 @@ def extract_query_params(query_str, override_context=None):
         resolved_date     = (today - timedelta(days=1)).strftime("%Y-%m-%d")
         date_was_explicit = True
     else:
-        month_names = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
-        explicit = re.search(r"(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})", q)
+        month_names = [
+            "january", "february", "march", "april", "may", "june",
+            "july", "august", "september", "october", "november", "december"
+        ]
+        explicit = re.search(
+            r"(\d{1,2})(?:st|nd|rd|th)?\s+"
+            r"(january|february|march|april|may|june|july|august"
+            r"|september|october|november|december)\s+(\d{4})",
+            q
+        )
         if explicit:
-            day = explicit.group(1).zfill(2)
-            month = str(month_names.index(explicit.group(2)) + 1).zfill(2)
-            year = explicit.group(3)
-            resolved_date = f"{year}-{month}-{day}"
-            date_was_explicit = True
-        iso = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", q)
-        if iso:
-            resolved_date = iso.group(1)
+            day               = explicit.group(1).zfill(2)
+            month             = str(month_names.index(explicit.group(2)) + 1).zfill(2)
+            year              = explicit.group(3)
+            resolved_date     = f"{year}-{month}-{day}"
             date_was_explicit = True
 
-    # Time resolution
+        iso = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", q)
+        if iso:
+            resolved_date     = iso.group(1)
+            date_was_explicit = True
+
+    # Time resolution 
+    # Requires colon (HH:MM) OR explicit am/pm — bare numbers won't match
     is_current_time = False
     resolved_time   = None
+
     current_keywords = ["right now", "current", "currently", "now", "latest", "live"]
     if any(k in q for k in current_keywords):
         resolved_time   = datetime.now().strftime("%H:%M")
         is_current_time = True
     else:
-        time_match = re.search(r"(?<!\d)(\d{1,2}):(\d{2})(?:\s*(am|pm))?(?!\d)|(?<!\d)(\d{1,2})\s*(am|pm)(?!\w)", q)
+        time_match = re.search(
+            r"(?<!\d)(\d{1,2}):(\d{2})(?:\s*(am|pm))?(?!\d)"
+            r"|(?<!\d)(\d{1,2})\s*(am|pm)(?!\w)",
+            q
+        )
         if time_match:
             if time_match.group(1):
                 hour = int(time_match.group(1))
@@ -129,75 +152,187 @@ def extract_query_params(query_str, override_context=None):
 
         if not resolved_time:
             if date_was_explicit:
+                # Historical query — default to end of day snapshot
                 resolved_time   = "18:00"
                 is_current_time = False
             else:
+                # No date, no time — user wants live data
                 resolved_time   = datetime.now().strftime("%H:%M")
                 is_current_time = True
 
-    # Shift/Line/Product/Intent extraction
+    # Shift resolution 
     resolved_shift = None
-    if "early morning" in q: resolved_shift = "Early Morning Shift"
-    elif "peak day" in q or "peak" in q: resolved_shift = "Peak Day Shift"
-    elif "afternoon" in q: resolved_shift = "Afternoon Shift"
-    elif "evening" in q: resolved_shift = "Evening Shift"
-    elif "downtime" in q: resolved_shift = "Downtime"
+    if   "early morning" in q:              resolved_shift = "Early Morning Shift"
+    elif "peak day" in q or "peak" in q:    resolved_shift = "Peak Day Shift"
+    elif "afternoon"     in q:              resolved_shift = "Afternoon Shift"
+    elif "evening"       in q:              resolved_shift = "Evening Shift"
+    elif "downtime"      in q:              resolved_shift = "Downtime"
 
-    all_lines = list(LINE_TO_PRODUCT.keys())
+    # Line extraction
+    all_lines   = list(LINE_TO_PRODUCT.keys())
     found_lines = [line for line in all_lines if re.search(rf"\b{line.lower()}\b", q)]
     if not found_lines and "lines" in override_context:
         found_lines = override_context["lines"]
 
-    product_keywords = {"REF": ["ref", "refrigerator", "fridge"], "WMC": ["wmc", "washing machine", "washer"], "COMP": ["comp", "compressor"], "RAC": ["rac", "air conditioner", "residential ac"], "A08": ["a08", "water purifier", "purifier"]}
+    # Product extraction ─
+    product_keywords = {
+        "REF":  ["ref", "refrigerator", "fridge"],
+        "WMC":  ["wmc", "washing machine", "washer"],
+        "COMP": ["comp", "compressor"],
+        "RAC":  ["rac", "air conditioner", "residential ac"],
+        "A08":  ["a08", "water purifier", "purifier"]
+    }
     found_products = []
     for prod_id, keywords in product_keywords.items():
         if any(kw in q for kw in keywords):
             found_products.append(prod_id)
-            if not found_lines: found_lines.extend(PRODUCTS[prod_id]["lines"].keys())
+            if not found_lines:
+                found_lines.extend(PRODUCTS[prod_id]["lines"].keys())
 
+    # Intent extraction 
     intent = "status"
-    if any(k in q for k in ["predict", "will", "meet", "on track", "forecast"]): intent = "prediction"
-    elif any(k in q for k in ["achieve", "achievement", "%"]): intent = "achieve"
-    elif any(k in q for k in ["result", "actual", "produced", "output"]): intent = "result"
-    elif any(k in q for k in ["target"]): intent = "target"
-    elif any(k in q for k in ["plan"]): intent = "plan"
-    elif any(k in q for k in ["rate", "speed", "per minute", "per hour"]): intent = "rate"
-    elif any(k in q for k in ["alert", "below", "threshold", "underperform"]): intent = "alerts"
-    elif any(k in q for k in ["summary", "total", "overall", "factory"]): intent = "summary"
+    if   any(k in q for k in ["predict", "will", "meet", "on track", "forecast"]): intent = "prediction"
+    elif any(k in q for k in ["achieve", "achievement", "%"]):                      intent = "achieve"
+    elif any(k in q for k in ["result", "actual", "produced", "output"]):           intent = "result"
+    elif any(k in q for k in ["target"]):                                            intent = "target"
+    elif any(k in q for k in ["plan"]):                                              intent = "plan"
+    elif any(k in q for k in ["rate", "speed", "per minute", "per hour"]):          intent = "rate"
+    elif any(k in q for k in ["alert", "below", "threshold", "underperform"]):      intent = "alerts"
+    elif any(k in q for k in ["summary", "total", "overall", "factory"]):           intent = "summary"
 
     return {
-        "lines": found_lines, "products": found_products, "date": resolved_date, "time": resolved_time,
-        "shift": resolved_shift, "intent": intent, "is_current_time": is_current_time,
-        "is_predictive": intent == "prediction", "is_detailed": any(k in q for k in ["detail", "detailed", "breakdown", "full"]),
-        "raw_query": query_str
+        "lines":           found_lines,
+        "products":        found_products,
+        "date":            resolved_date,
+        "time":            resolved_time,
+        "shift":           resolved_shift,
+        "intent":          intent,
+        "is_current_time": is_current_time,
+        "is_predictive":   intent == "prediction",
+        "is_detailed":     any(k in q for k in ["detail", "detailed", "breakdown", "full"]),
+        "raw_query":       query_str
     }
 
+
+# Step 2 + 3: Retrieve and format context
 def retrieve_and_format(params):
-    date, time, lines, shift, intent = params["date"], params["time"], params["lines"], params["shift"], params["intent"]
-    today = datetime.now().strftime("%Y-%m-%d")
+    date   = params["date"]
+    time   = params["time"]
+    lines  = params["lines"]
+    shift  = params["shift"]
+    intent = params["intent"]
+    today  = datetime.now().strftime("%Y-%m-%d")
     is_live = params["is_current_time"] and date == today
+
     rows = []
+
     if is_live:
         snapshot = get_database_snapshot(today, datetime.now().strftime("%H:%M:%S"))
-        rows = snapshot["rows"]
-        if lines: rows = [r for r in rows if r["line"] in lines]
+        rows     = snapshot["rows"]
+        if lines:             rows = [r for r in rows if r["line"] in lines]
         if intent == "alerts": rows = [r for r in rows if r.get("below_threshold")]
     else:
-        rows = query_for_rag(date=date, line=lines[0] if len(lines) == 1 else None, product=params["products"][0] if len(params["products"]) == 1 else None, phase=shift, time=time, limit=15)
-        if len(lines) > 1: rows = [r for r in rows if r["line"] in lines]
-    if not rows: return "No production data found matching the query parameters.", []
+        rows = query_for_rag(
+            date    = date,
+            line    = lines[0] if len(lines) == 1 else None,
+            product = params["products"][0] if len(params["products"]) == 1 else None,
+            phase   = shift,
+            time    = time,
+            limit   = 15
+        )
+        if len(lines) > 1:
+            rows = [r for r in rows if r["line"] in lines]
+
+    if not rows:
+        return "No production data found matching the query parameters.", []
+
     context_parts = []
     for r in rows:
-        bt = r.get("below_threshold") or r.get("belowThreshold") or False
-        context_parts.append(f"Line {r['line']} ({r.get('product_name', r.get('productName', ''))}) | Date: {r['date']} | Time: {r['time']} | Status: {'BELOW THRESHOLD' if bt else 'On Track'} | Achieve: {r.get('achieve', 0):.1f}%")
+        bt      = r.get("below_threshold") or r.get("belowThreshold") or False
+        achieve = r.get("achieve", 0)
+        context_parts.append(
+            f"Line {r['line']} ({r.get('product_name', r.get('productName', ''))}) | "
+            f"Date: {r['date']} | Time: {r['time']} | "
+            f"Phase: {r.get('phase', 'N/A')}\n"
+            f"  Plan: {r.get('plan',0)} units | "
+            f"Target: {r.get('target',0)} units | "
+            f"Result: {r.get('result',0)} units | "
+            f"Achieve: {achieve:.1f}% | "
+            f"Status: {'BELOW THRESHOLD' if bt else 'On Track'}"
+        )
+
+    # Add factory summary for summary intent or factory-wide queries
+    if intent == "summary" or not lines:
+        if is_live:
+            snap    = get_database_snapshot(today, datetime.now().strftime("%H:%M:%S"))
+            summary = snap["summary"]
+        else:
+            summary = query_day_summary(date) or {}
+
+        if summary:
+            context_parts.append(
+                f"\nFACTORY TOTAL | Date: {date}\n"
+                f"  Total Plan: {summary.get('plan', summary.get('total_plan', 'N/A'))} | "
+                f"Total Target: {summary.get('target', summary.get('total_target', 'N/A'))} | "
+                f"Total Result: {summary.get('result', summary.get('total_result', 'N/A'))} | "
+                f"Avg Achieve: {summary.get('achieve', summary.get('avg_achieve', 0)):.1f}%"
+            )
+
     return "\n\n".join(context_parts), rows
 
-def call_gemini(query_str, context, history=None, is_detailed=False):
-    history_text = "\n".join([f"{'User' if t['role']=='user' else 'Assistant'}: {t['content']}" for t in (history or [])[-6:]])
-    prompt = f"{SYSTEM_PROMPT}\n\nRETRIEVED PRODUCTION DATA:\n{context}\n\nCONVERSATION HISTORY:\n{history_text}\n\nUser: {query_str}\nAssistant:"
-    return get_client().models.generate_content(model=GEMINI_MODEL, contents=prompt).text.strip()
 
+# Step 4: Call Gemini 
+def call_gemini(query_str, context, history=None, is_detailed=False):
+    """
+    Builds the full prompt and calls Gemini 2.5 Flash.
+    Injects today's date so the LLM correctly resolves
+    relative date references like 'yesterday'.
+    """
+    # FIX: Inject today's and yesterday's date into every prompt
+    # so the LLM never confuses relative date references
+    today_str     = datetime.now().strftime("%A, %d %B %Y")
+    yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%A, %d %B %Y")
+    now_str       = datetime.now().strftime("%H:%M")
+
+    history_text = "\n".join([
+        f"{'User' if t['role'] == 'user' else 'Assistant'}: {t['content']}"
+        for t in (history or [])[-6:]
+    ])
+
+    detail_instruction = (
+        "\nThe user has requested a DETAILED breakdown. "
+        "Provide full line-by-line analysis with all numbers."
+        if is_detailed else ""
+    )
+
+    prompt = f"""{SYSTEM_PROMPT}
+
+CURRENT DATE AND TIME: {today_str} — {now_str}
+Today is {today_str}. Yesterday was {yesterday_str}.
+{detail_instruction}
+
+RETRIEVED PRODUCTION DATA:
+{context}
+
+CONVERSATION HISTORY:
+{history_text}
+
+User: {query_str}
+Assistant:""".strip()
+
+    return get_client().models.generate_content(
+        model    = GEMINI_MODEL,
+        contents = prompt
+    ).text.strip()
+
+
+# Main RAG function
 def process_chat(query_str, history=None):
+    """
+    Full RAG pipeline entry point.
+    Called by POST /api/chat in app.py.
+    """
+    # Carry date context from previous assistant turn
     last_context = {}
     if history:
         for turn in reversed(history):
@@ -206,78 +341,96 @@ def process_chat(query_str, history=None):
                 if date_match:
                     last_context["date"] = date_match.group(1)
                 break
-    params = extract_query_params(query_str, override_context=last_context)
+
+    params        = extract_query_params(query_str, override_context=last_context)
     context, rows = retrieve_and_format(params)
+
     return {
-        "response": call_gemini(query_str, context, history, params["is_detailed"]),
-        "params": params, "rows_used": len(rows), "is_live": params["is_current_time"], "intent": params["intent"]
+        "response":  call_gemini(query_str, context, history, params["is_detailed"]),
+        "params":    params,
+        "rows_used": len(rows),
+        "is_live":   params["is_current_time"],
+        "intent":    params["intent"]
     }
 
+
+# Troubleshoot pipeline 
 def process_troubleshoot(problem_desc: str):
     """
-    RAG troubleshooting engine.
-    Queries problem_library and resolution_history.
-    If no match found, returns "Contact your LG supervisor immediately."
-    Otherwise, synthesises a clear response using Gemini.
+    Equipment diagnostics RAG pipeline.
+    Searches problem_library and resolution_history.
+    Synthesises a step-by-step guide using Gemini.
+    Unknown problems → "Contact your LG supervisor immediately."
     """
-    # Search manual and history
-    manual_matches = query_problem_library(problem_desc)
+    manual_matches  = query_problem_library(problem_desc)
     history_matches = query_resolution_history(problem_desc)
-    
+
     if not manual_matches and not history_matches:
         return {
-            "response": "No matching troubleshooting guides or historical resolutions were found for this issue in the LG database. **Contact your LG supervisor immediately.**",
-            "manual_matches": [],
+            "response":       "No matching troubleshooting guides or historical resolutions were found "
+                              "for this issue in the LG database. **Contact your LG supervisor immediately.**",
+            "manual_matches":  [],
             "history_matches": [],
-            "synthesized": False
+            "synthesized":     False
         }
-        
-    # Format context
+
     manual_context = ""
     if manual_matches:
         manual_context = "OFFICIAL LG MANUAL GUIDES:\n"
         for idx, item in enumerate(manual_matches, 1):
-            manual_context += f"{idx}. Category: {item['category']} | Problem: {item['problem']}\n   Official Solution: {item['manual_solution']}\n"
-            
+            manual_context += (
+                f"{idx}. Category: {item['category']} | Problem: {item['problem']}\n"
+                f"   Official Solution: {item['manual_solution']}\n"
+            )
+
     history_context = ""
     if history_matches:
         history_context = "HISTORICAL RESOLUTIONS:\n"
         for idx, item in enumerate(history_matches, 1):
-            history_context += f"{idx}. Problem: {item['problem']}\n   Action Taken: {item['action_taken']}\n   Outcome: {item['outcome']} (Date: {item['date']})\n"
-            
+            history_context += (
+                f"{idx}. Problem: {item['problem']}\n"
+                f"   Action Taken: {item['action_taken']}\n"
+                f"   Outcome: {item['outcome']} (Date: {item['date']})\n"
+            )
+
     prompt = f"""
 You are an expert LG Factory Troubleshooting Assistant.
 A user reported the following operational issue on the factory floor:
 "{problem_desc}"
 
-Here is the information retrieved from our official LG Troubleshooting Manual and historical resolution logs:
+Here is the information retrieved from our official LG Troubleshooting Manual
+and historical resolution logs:
 
 {manual_context}
 
 {history_context}
 
 INSTRUCTIONS:
-1. If the user's reported problem is completely unrelated to LG factory operations, machinery, or the production lines mentioned in the manual, ignore the manual/history matches and reply EXACTLY: "No matching troubleshooting guides or historical resolutions were found for this issue in the LG database. Contact your LG supervisor immediately."
-2. Otherwise, synthesize both the official manual solutions and past historical action logs into a clear, step-by-step troubleshooting guide.
-3. Be highly professional, direct, and actionable. Number the troubleshooting steps clearly.
-4. Highlight any safety warnings or supervisor contacts if necessary, but prioritize giving the steps to resolve the issue.
+1. If the reported problem is completely unrelated to LG factory operations,
+   machinery, or production lines, reply EXACTLY:
+   "No matching troubleshooting guides or historical resolutions were found
+   for this issue in the LG database. Contact your LG supervisor immediately."
+2. Otherwise, synthesize both the official manual solutions and historical logs
+   into a clear, numbered, step-by-step troubleshooting guide.
+3. Be professional, direct, and actionable.
+4. Highlight safety warnings or supervisor escalation points where necessary.
 
 Synthesized Troubleshooting Guide:
 """.strip()
 
     try:
         response_text = get_client().models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
+            model    = GEMINI_MODEL,
+            contents = prompt
         ).text.strip()
     except Exception as e:
         response_text = f"Error generating troubleshooting response: {str(e)}"
-        
+
     return {
-        "response": response_text,
-        "manual_matches": manual_matches,
+        "response":        response_text,
+        "manual_matches":  manual_matches,
         "history_matches": history_matches,
-        "synthesized": True
+        "synthesized":     True
     }
 
 
