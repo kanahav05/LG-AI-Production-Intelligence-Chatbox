@@ -1,11 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-const VALID_USERS = [
-  { id: 'LG2026', password: 'admin123', name: 'Plant Head' },
-  { id: 'LG2027', password: 'manager1', name: 'Product Manager' },
-  { id: 'LG2028', password: 'employee', name: 'Line Employee' },
-]
+import { signIn } from '../../auth'
 
 export function SignInPage() {
   const [employeeId, setEmployeeId] = useState('')
@@ -14,24 +9,18 @@ export function SignInPage() {
   const [loading, setLoading]       = useState(false)
   const navigate = useNavigate()
 
-  function handleSignIn(e: React.FormEvent) {
+  async function handleSignIn(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    setTimeout(() => {
-      const user = VALID_USERS.find(
-        u => u.id === employeeId && u.password === password
-      )
-      if (user) {
-        localStorage.setItem('lg-auth', 'true')
-        localStorage.setItem('lg-user', JSON.stringify({ id: user.id, name: user.name }))
-        navigate('/dashboard')
-      } else {
-        setError('Invalid Employee ID or Password.')
-        setLoading(false)
-      }
-    }, 600)
+    const result = await signIn(employeeId, password)
+    if (result.success) {
+      navigate('/dashboard')
+    } else {
+      setError(result.error ?? 'Invalid Employee ID or Password.')
+      setLoading(false)
+    }
   }
 
   return (

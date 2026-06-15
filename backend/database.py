@@ -14,6 +14,10 @@ def get_connection():
     so results come back as dictionaries."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-64000")   # 64MB cache
+    conn.execute("PRAGMA temp_store=MEMORY")
     return conn
 
 # Table creation

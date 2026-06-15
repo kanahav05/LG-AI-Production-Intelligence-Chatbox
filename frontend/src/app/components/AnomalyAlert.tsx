@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { X, AlertTriangle, ChevronLeft, ChevronRight, FlaskConical } from "lucide-react";
 import { fetchLive } from "../../api";
 import { AlertData } from "../alertsContext";
@@ -196,15 +196,23 @@ export function TestAlertTrigger({ setAlerts }: TestAlertTriggerProps) {
 
 // Polling hook
 export function useAnomalyDetection() {
-  const [alerts,       setAlerts]       = useState<AlertData[]>([]);
-  const [alertedLines, setAlertedLines] = useState<Set<string>>(new Set());
+  const [alerts, setAlerts] = useState<AlertData[]>([]);
+  // Use a ref for alertedLines so the polling callback identity stays stable
+  // and doesn't trigger an infinite useEffect → fetch → setState → new callback loop.
+  const alertedLinesRef = useRef<Set<string>>(new Set());
 
   const checkForAnomalies = useCallback(async () => {
+    // Skip polling when the user isn't authenticated — avoids the
+    // 401 → handle401 redirect → page reload infinite loop on the
+    // sign-in page.
+    const token = localStorage.getItem("lg-auth-token");
+    if (!token) return;
+
     try {
       const snapshot = await fetchLive();
 
       const newAlerts: AlertData[] = snapshot.alerts
-        .filter(a => a.achieve < 90 && !alertedLines.has(a.line))
+        .filter(a => a.achieve < 90 && !alertedLinesRef.current.has(a.line))
         .map(a => ({
           line:       a.line,
           product:    a.product,
@@ -214,18 +222,14 @@ export function useAnomalyDetection() {
         }));
 
       if (newAlerts.length > 0) {
-        setAlertedLines(prev => {
-          const next = new Set(prev);
-          newAlerts.forEach(a => next.add(a.line));
-          return next;
-        });
+        newAlerts.forEach(a => alertedLinesRef.current.add(a.line));
         setAlerts(newAlerts);
         playAlertSequence(newAlerts.length);
       }
     } catch {
       // Backend unreachable or outside production hours — skip silently
     }
-  }, [alertedLines]);
+  }, []); // stable — no state dependencies
 
   useEffect(() => {
     checkForAnomalies();
@@ -240,7 +244,7 @@ export function useAnomalyDetection() {
     const now      = new Date();
     const midnight = new Date(now);
     midnight.setHours(24, 0, 0, 0);
-    const timeout  = setTimeout(() => setAlertedLines(new Set()), midnight.getTime() - now.getTime());
+    const timeout  = setTimeout(() => { alertedLinesRef.current = new Set(); }, midnight.getTime() - now.getTime());
     return () => clearTimeout(timeout);
   }, []);
 

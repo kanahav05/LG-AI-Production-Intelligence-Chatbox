@@ -1,194 +1,238 @@
 // api.ts
-// All communication between the React frontend and FastAPI backend..
+// All communication between the React frontend and FastAPI backend.
+// Attaches JWT token to every request.
+// Redirects to sign in page on 401 (token expired).
 
 const BASE_URL = "http://localhost:8000";
 
-// Types
+import { AUTH_TOKEN_KEY } from "./auth";
 
+// ── Auth headers ──────────────────────────────────────────────
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// ── 401 interceptor ───────────────────────────────────────────
+// If any request returns 401 (token expired or invalid),
+// clear session and redirect to sign in page automatically.
+// Guard: only redirect if we're NOT already on the sign-in page
+// to prevent the infinite reload loop (fetch→401→redirect→fetch…).
+function handle401(res: Response): Response {
+  if (res.status === 401) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem("lg-user");
+    // Only redirect if not already on the sign-in page
+    if (window.location.pathname !== "/") {
+      window.location.href = "/";
+    }
+  }
+  return res;
+}
+
+// ── Authenticated fetch helper ────────────────────────────────
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...(options.headers as Record<string, string> ?? {}),
+    },
+  });
+  return handle401(res);
+}
+
+// ── Types ─────────────────────────────────────────────────────
 export interface LineRow {
-  date: string;
-  time: string;
-  product: string;
-  product_name: string;
-  line: string;
-  plan: number;
-  target: number;
-  result: number;
-  achieve: number;
+  date:            string;
+  time:            string;
+  product:         string;
+  product_name:    string;
+  line:            string;
+  plan:            number;
+  target:          number;
+  result:          number;
+  achieve:         number;
   below_threshold: boolean;
-  phase: string;
+  phase:           string;
 }
 
 export interface LiveSnapshot {
-  date: string;
-  time: string;
-  production_active: boolean;
-  rows: LineRow[];
+  date:               string;
+  time:               string;
+  production_active:  boolean;
+  rows:               LineRow[];
   summary: {
-    date: string;
-    time: string;
-    plan: number;
-    target: number;
-    result: number;
+    date:    string;
+    time:    string;
+    plan:    number;
+    target:  number;
+    result:  number;
     achieve: number;
   };
   alerts: {
-    line: string;
+    line:    string;
     product: string;
     achieve: number;
   }[];
 }
 
 export interface Prediction {
-  line: string;
-  product: string;
-  product_name: string;
-  plan: number;
-  current_result: number;
-  projected_result: number;
-  will_meet_plan: boolean;
-  achieve_pct: number;
-  confidence: number;
-  units_needed: number;
+  line:              string;
+  product:           string;
+  product_name:      string;
+  plan:              number;
+  current_result:    number;
+  projected_result:  number;
+  will_meet_plan:    boolean;
+  achieve_pct:       number;
+  confidence:        number;
+  units_needed:      number;
   minutes_remaining: number;
-  below_threshold: boolean;
-  phase: string;
+  below_threshold:   boolean;
+  phase:             string;
 }
 
 export interface ChatMessage {
-  role: "user" | "assistant";
+  role:    "user" | "assistant";
   content: string;
 }
 
 export interface ChatResponse {
-  response: string;
+  response:  string;
   rows_used: number;
-  is_live: boolean;
-  intent: string;
+  is_live:   boolean;
+  intent:    string;
 }
 
-// Live snapshot (one-time fetch)
+export interface TroubleshootMatchManual {
+  id:              number;
+  problem:         string;
+  manual_solution: string;
+  category:        string;
+}
+
+export interface TroubleshootMatchHistory {
+  id:           number;
+  problem:      string;
+  action_taken: string;
+  outcome:      string;
+  date:         string;
+}
+
+export interface TroubleshootResponse {
+  response:        string;
+  manual_matches:  TroubleshootMatchManual[];
+  history_matches: TroubleshootMatchHistory[];
+  synthesized:     boolean;
+}
+
+// ── Live snapshot ─────────────────────────────────────────────
 export async function fetchLive(): Promise<LiveSnapshot> {
-  const res = await fetch(`${BASE_URL}/api/live`);
+  const res = await authFetch(`${BASE_URL}/api/live`);
   if (!res.ok) throw new Error("Failed to fetch live data");
   return res.json();
 }
 
-// Historical
+// ── Historical: by date and line ──────────────────────────────
 export async function fetchHistoryLine(
   date: string,
   line: string
 ): Promise<{ records: LineRow[] }> {
-  const res = await fetch(
+  const res = await authFetch(
     `${BASE_URL}/api/history/line?date=${date}&line=${line}`
   );
   if (!res.ok) throw new Error("Failed to fetch history");
   return res.json();
 }
 
-// Historical: by date and product
+// ── Historical: by date and product ───────────────────────────
 export async function fetchHistoryProduct(
-  date: string,
+  date:    string,
   product: string
 ): Promise<{ records: LineRow[] }> {
-  const res = await fetch(
+  const res = await authFetch(
     `${BASE_URL}/api/history/product?date=${date}&product=${product}`
   );
   if (!res.ok) throw new Error("Failed to fetch history");
   return res.json();
 }
 
-// Day summary 
+// ── Day summary ───────────────────────────────────────────────
 export async function fetchDaySummary(date: string) {
-  const res = await fetch(`${BASE_URL}/api/summary/${date}`);
+  const res = await authFetch(`${BASE_URL}/api/summary/${date}`);
   if (!res.ok) throw new Error("Failed to fetch summary");
   return res.json();
 }
 
-// Predict all lines 
+// ── Predict all lines ─────────────────────────────────────────
 export async function fetchPredictions(): Promise<{
   predictions: Prediction[];
   summary: {
-    total_lines: number;
-    on_track: number;
-    at_risk: number;
+    total_lines:     number;
+    on_track:        number;
+    at_risk:         number;
     below_threshold: number;
   };
 }> {
-  const res = await fetch(`${BASE_URL}/api/predict/all`);
+  const res = await authFetch(`${BASE_URL}/api/predict/all`);
   if (!res.ok) throw new Error("Failed to fetch predictions");
   return res.json();
 }
 
-// Predict single line
+// ── Predict single line ───────────────────────────────────────
 export async function fetchPrediction(line: string): Promise<Prediction> {
-  const res = await fetch(`${BASE_URL}/api/predict/${line}`);
+  const res = await authFetch(`${BASE_URL}/api/predict/${line}`);
   if (!res.ok) throw new Error("Failed to fetch prediction");
   return res.json();
 }
 
-// Chat
+// ── Chat ──────────────────────────────────────────────────────
 export async function sendChatQuery(
-  query: string,
+  query:   string,
   history: ChatMessage[] = []
 ): Promise<ChatResponse> {
-  const res = await fetch(`${BASE_URL}/api/chat`, {
-    method: "POST",
+  const res = await authFetch(`${BASE_URL}/api/chat`, {
+    method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, history }),
+    body:    JSON.stringify({ query, history }),
   });
+  if (res.status === 429) {
+    throw new Error("Rate limit exceeded. Please wait a moment before sending another query.");
+  }
   if (!res.ok) throw new Error("Failed to send chat query");
   return res.json();
 }
 
-export interface TroubleshootMatchManual {
-  id: number;
-  problem: string;
-  manual_solution: string;
-  category: string;
-}
-
-export interface TroubleshootMatchHistory {
-  id: number;
-  problem: string;
-  action_taken: string;
-  outcome: string;
-  date: string;
-}
-
-export interface TroubleshootResponse {
-  response: string;
-  manual_matches: TroubleshootMatchManual[];
-  history_matches: TroubleshootMatchHistory[];
-  synthesized: boolean;
-}
-
+// ── Troubleshoot ──────────────────────────────────────────────
 export async function sendTroubleshootQuery(
   problem: string
 ): Promise<TroubleshootResponse> {
-  const res = await fetch(`${BASE_URL}/api/troubleshoot`, {
-    method: "POST",
+  const res = await authFetch(`${BASE_URL}/api/troubleshoot`, {
+    method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ problem }),
+    body:    JSON.stringify({ problem }),
   });
+  if (res.status === 429) {
+    throw new Error("Rate limit exceeded. Please wait before submitting another diagnostic.");
+  }
   if (!res.ok) throw new Error("Failed to send troubleshoot query");
   return res.json();
 }
 
-// WebSocket live stream 
-// Connects to /ws/live and calls callbacks every second.
-// Returns a stop() function to disconnect cleanly.
-//
-
-
+// ── WebSocket live stream ─────────────────────────────────────
+// Passes JWT as query param since WebSocket headers aren't
+// supported in browsers.
 export function connectLiveStream({
   onSnapshot,
   onAlert,
 }: {
-  onSnapshot: (data: LiveSnapshot) => void;
-  onAlert?: (alerts: LiveSnapshot["alerts"]) => void;
+  onSnapshot:  (data: LiveSnapshot) => void;
+  onAlert?:    (alerts: LiveSnapshot["alerts"]) => void;
 }): () => void {
-  const ws = new WebSocket(`ws://localhost:8000/ws/live`);
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const url   = `ws://localhost:8000/ws/live${token ? `?token=${token}` : ""}`;
+  const ws    = new WebSocket(url);
 
   ws.onopen = () => {
     console.log("WebSocket connected to live stream");
@@ -206,8 +250,14 @@ export function connectLiveStream({
     console.error("WebSocket error:", err);
   };
 
-  ws.onclose = () => {
-    console.log("WebSocket disconnected");
+  ws.onclose = (event) => {
+    console.log("WebSocket disconnected", event.code);
+    // Code 1008 = policy violation = JWT rejected
+    if (event.code === 1008) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem("lg-user");
+      window.location.href = "/";
+    }
   };
 
   return () => ws.close();

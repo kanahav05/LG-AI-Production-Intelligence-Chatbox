@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Bell, User, LogOut, LayoutDashboard, MessageSquare, Activity, Menu, X, ChevronRight } from 'lucide-react'
+import { signOut } from '../../auth'
 import { AlertsContext } from '../alertsContext'
 
 interface Alert {
@@ -74,8 +75,7 @@ export function Header({ alerts }: HeaderProps) {
   const user = JSON.parse(localStorage.getItem('lg-user') || '{"name":"User"}')
 
   function handleSignOut() {
-    localStorage.removeItem('lg-auth')
-    localStorage.removeItem('lg-user')
+    signOut()
     navigate('/')
   }
 

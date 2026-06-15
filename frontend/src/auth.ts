@@ -1,46 +1,50 @@
 // auth.ts
-// Session management via localStorage.
+// JWT based authentication flow
+// Stores JWT token and user info in localStorage
 
-const AUTH_KEY = 'lg-auth'
-const USER_KEY = 'lg-user'
+export const AUTH_TOKEN_KEY = 'lg-auth-token';
+const USER_KEY = 'lg-user';
 
 export interface User {
-  id:   string
-  name: string
+  id: string;
+  name: string;
+  role: string;
 }
 
-const VALID_USERS = [
-  { id: 'LG2026', password: 'admin123', name: 'Plant Head'      },
-  { id: 'LG2027', password: 'manager1', name: 'Product Manager' },
-  { id: 'LG2028', password: 'employee', name: 'Line Employee'   },
-]
-
-export function signIn(
-  employeeId: string,
-  password:   string
-): { success: boolean; user?: User; error?: string } {
-  const user = VALID_USERS.find(
-    u => u.id === employeeId && u.password === password
-  )
-  if (user) {
-    const u: User = { id: user.id, name: user.name }
-    localStorage.setItem(AUTH_KEY, 'true')
-    localStorage.setItem(USER_KEY, JSON.stringify(u))
-    return { success: true, user: u }
+export async function signIn(employeeId: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+  try {
+    const response = await fetch('http://localhost:8000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: employeeId, password }),
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      return { success: false, error: data.detail ?? 'Invalid credentials' };
+    }
+    const data = await response.json();
+    const token = data.access_token;
+    // Decode token payload (base64) to extract user details (optional client-side verification)
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const user: User = { id: payload.user_id, name: payload.name, role: payload.role };
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    return { success: true, user };
+  } catch (e) {
+    return { success: false, error: 'Network error' };
   }
-  return { success: false, error: 'Invalid Employee ID or Password.' }
 }
 
 export function signOut(): void {
-  localStorage.removeItem(AUTH_KEY)
-  localStorage.removeItem(USER_KEY)
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
 }
 
 export function isAuthenticated(): boolean {
-  return localStorage.getItem(AUTH_KEY) === 'true'
+  return !!localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
 export function getCurrentUser(): User | null {
-  const raw = localStorage.getItem(USER_KEY)
-  return raw ? JSON.parse(raw) : null
+  const raw = localStorage.getItem(USER_KEY);
+  return raw ? JSON.parse(raw) : null;
 }
