@@ -40,8 +40,26 @@ export function signOut(): void {
   localStorage.removeItem(USER_KEY);
 }
 
+export function hasValidSession(): boolean {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return false;
+
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const expiredAt = payload.exp * 1000;
+    if (Date.now() > expiredAt) {
+      signOut();
+      return false;
+    }
+    return true;
+  } catch {
+    signOut();
+    return false;
+  }
+}
+
 export function isAuthenticated(): boolean {
-  return !!localStorage.getItem(AUTH_TOKEN_KEY);
+  return hasValidSession();
 }
 
 export function getCurrentUser(): User | null {

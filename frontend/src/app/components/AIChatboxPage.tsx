@@ -32,6 +32,7 @@ import {
   TroubleshootMatchManual, 
   TroubleshootMatchHistory 
 } from "../../api";
+import { reportClientError, checkAndReportInvalidLine } from "../../errorLogger";
 
 // Types 
 interface Message {
@@ -146,6 +147,9 @@ export function AIChatboxPage() {
     if (!text || isLoading) return;
     setInputText("");
 
+    // Validate line codes
+    await checkAndReportInvalidLine(text, "/chatbox");
+
     const userMsg: Message = {
       id:        Date.now().toString(),
       type:      "user",
@@ -216,7 +220,10 @@ export function AIChatboxPage() {
         localStorage.setItem('lg-chat-sessions', JSON.stringify(updated))
         return updated
       });
-    } catch {
+    } catch (err) {
+      reportClientError("ERR_001", err instanceof Error ? err.message : "Chat query request failed", {
+        query: text,
+      });
       setMessages(prev => [
         ...prev.filter(m => m.id !== processingId),
         {
@@ -244,14 +251,14 @@ export function AIChatboxPage() {
       prev.map(m => m.id === message.id ? { ...m, isDetailed: true } : m)
     );
 
-    try {
-      const lastUserMessage = conversationHistory
+    const lastUserMessage = conversationHistory
       .filter(m => m.role === "user")
       .slice(-1)[0]?.content ?? "";
-      const detailQuery = lastUserMessage
+    const detailQuery = lastUserMessage
       ? `Give me a detailed breakdown for: ${lastUserMessage}`
       : "detail";
-      
+
+    try {
       const result = await sendChatQuery(detailQuery, conversationHistory);
 
       setConversationHistory(prev => [
@@ -270,7 +277,10 @@ export function AIChatboxPage() {
           isDetailed: true, // no Detail button on detailed response
         },
       ]);
-    } catch {
+    } catch (err) {
+      reportClientError("ERR_001", err instanceof Error ? err.message : "Detail request failed", {
+        query: detailQuery,
+      });
       // Restore Detail button if call failed
       setMessages(prev =>
         prev.map(m => m.id === message.id ? { ...m, isDetailed: false } : m)
@@ -345,6 +355,9 @@ export function AIChatboxPage() {
     if (!problemText || isLoading) return;
     setTroubleshootInput("");
 
+    // Validate line codes
+    await checkAndReportInvalidLine(problemText, "/chatbox");
+
     setIsLoading(true);
     
     // Add temporary loading report
@@ -379,6 +392,9 @@ export function AIChatboxPage() {
       // Auto expand matches for this new report
       setExpandedReportIds(prev => ({ ...prev, [tempReportId]: true }));
     } catch (err) {
+      reportClientError("ERR_001", err instanceof Error ? err.message : "Troubleshoot query request failed", {
+        query: problemText,
+      });
       setDiagnosticReports(prev =>
         prev.map(r =>
           r.id === tempReportId
@@ -432,6 +448,11 @@ export function AIChatboxPage() {
   // Voice input
   const handleVoiceToggle = () => {
     if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
+      reportClientError(
+        "INFO_004",
+        "Voice input requested but SpeechRecognition is unavailable in this browser.",
+        { page: "/chatbox" }
+      );
       alert("Voice input is not supported in this browser. Please use Chrome or Edge.");
       return;
     }
@@ -471,6 +492,20 @@ export function AIChatboxPage() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // INFO_003 — only .csv and .json are supported for sandbox analysis
+    const isValidFormat = /\.(csv|json)$/i.test(file.name);
+    if (!isValidFormat) {
+      reportClientError(
+        "INFO_003",
+        `Unsupported file format uploaded: "${file.name}"`,
+        { page: "/chatbox" }
+      );
+      alert("Please upload a .csv or .json file.");
+      e.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;

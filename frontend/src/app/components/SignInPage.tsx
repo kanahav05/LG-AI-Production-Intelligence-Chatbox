@@ -16,7 +16,7 @@ export function SignInPage() {
 
     const result = await signIn(employeeId, password)
     if (result.success) {
-      navigate('/dashboard')
+      navigate('/dashboard', { replace: true })
     } else {
       setError(result.error ?? 'Invalid Employee ID or Password.')
       setLoading(false)

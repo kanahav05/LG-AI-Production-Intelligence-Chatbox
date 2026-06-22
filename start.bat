@@ -5,7 +5,7 @@ echo ================================================
 
 :: Start FastAPI backend in a new command prompt
 echo Starting backend on port 8000...
-start "LG Backend" cmd /k "cd /d %~dp0backend && ..\venv\Scripts\uvicorn app:app --host 0.0.0.0 --port 8000 --workers 4"
+start "LG Backend" cmd /k "cd /d %~dp0backend && ..\.venv\Scripts\uvicorn app:app --host 0.0.0.0 --port 8000 --workers 4"
 
 :: Wait 3 seconds for backend to start up
 timeout /t 3 /nobreak >nul

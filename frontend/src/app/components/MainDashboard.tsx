@@ -11,6 +11,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { fetchLive, connectLiveStream, LiveSnapshot } from "../../api";
+import { reportClientError } from "../../errorLogger";
 
 const productFilters = ["All", "REF", "WMC", "COMP", "RAC", "A08"];
 
@@ -24,7 +25,12 @@ export function MainDashboard() {
     // Initial fetch
     fetchLive()
       .then(data => { setLiveData(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        reportClientError("ERR_001", err instanceof Error ? err.message : "Dashboard live data fetch failed", {
+          page: "/dashboard",
+        });
+        setLoading(false);
+      });
 
     // WebSocket for live updates
     const stop = connectLiveStream({

@@ -6,14 +6,15 @@
 const BASE_URL = "http://localhost:8000";
 
 import { AUTH_TOKEN_KEY } from "./auth";
+import { reportClientError } from "./errorLogger";
 
-// ── Auth headers ──────────────────────────────────────────────
+// Auth headers 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-// ── 401 interceptor ───────────────────────────────────────────
+// 401 interceptor
 // If any request returns 401 (token expired or invalid),
 // clear session and redirect to sign in page automatically.
 // Guard: only redirect if we're NOT already on the sign-in page
@@ -30,19 +31,37 @@ function handle401(res: Response): Response {
   return res;
 }
 
-// ── Authenticated fetch helper ────────────────────────────────
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      ...getAuthHeaders(),
-      ...(options.headers as Record<string, string> ?? {}),
-    },
-  });
-  return handle401(res);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        ...getAuthHeaders(),
+        ...(options.headers as Record<string, string> ?? {}),
+      },
+    });
+    if (!res.ok && res.status >= 500) {
+      await reportClientError(
+        "ERR_001",
+        `HTTP ${res.status} from ${url}`,
+        {
+          page: window.location.pathname,
+          responseCode: String(res.status),
+        }
+      );
+    }
+    return handle401(res);
+  } catch (error) {
+    const code = navigator.onLine === false ? "INFO_001" : "ERR_001";
+    await reportClientError(code, error instanceof Error ? error.message : "Network request failed", {
+      page: window.location.pathname,
+      responseCode: "NETWORK_ERROR",
+    });
+    throw error;
+  }
 }
 
-// ── Types ─────────────────────────────────────────────────────
+// Types 
 export interface LineRow {
   date:            string;
   time:            string;
@@ -127,14 +146,14 @@ export interface TroubleshootResponse {
   synthesized:     boolean;
 }
 
-// ── Live snapshot ─────────────────────────────────────────────
+// Live snapshot 
 export async function fetchLive(): Promise<LiveSnapshot> {
   const res = await authFetch(`${BASE_URL}/api/live`);
   if (!res.ok) throw new Error("Failed to fetch live data");
   return res.json();
 }
 
-// ── Historical: by date and line ──────────────────────────────
+// Historical: by date and line 
 export async function fetchHistoryLine(
   date: string,
   line: string
@@ -146,7 +165,7 @@ export async function fetchHistoryLine(
   return res.json();
 }
 
-// ── Historical: by date and product ───────────────────────────
+// Historical: by date and product 
 export async function fetchHistoryProduct(
   date:    string,
   product: string
@@ -158,14 +177,14 @@ export async function fetchHistoryProduct(
   return res.json();
 }
 
-// ── Day summary ───────────────────────────────────────────────
+// Day summary 
 export async function fetchDaySummary(date: string) {
   const res = await authFetch(`${BASE_URL}/api/summary/${date}`);
   if (!res.ok) throw new Error("Failed to fetch summary");
   return res.json();
 }
 
-// ── Predict all lines ─────────────────────────────────────────
+// Predict all lines 
 export async function fetchPredictions(): Promise<{
   predictions: Prediction[];
   summary: {
@@ -180,14 +199,14 @@ export async function fetchPredictions(): Promise<{
   return res.json();
 }
 
-// ── Predict single line ───────────────────────────────────────
+// Predict single line 
 export async function fetchPrediction(line: string): Promise<Prediction> {
   const res = await authFetch(`${BASE_URL}/api/predict/${line}`);
   if (!res.ok) throw new Error("Failed to fetch prediction");
   return res.json();
 }
 
-// ── Chat ──────────────────────────────────────────────────────
+// Chat 
 export async function sendChatQuery(
   query:   string,
   history: ChatMessage[] = []
@@ -198,13 +217,17 @@ export async function sendChatQuery(
     body:    JSON.stringify({ query, history }),
   });
   if (res.status === 429) {
+    await reportClientError("WARN_004", "Rate limit exceeded on /api/chat", {
+      query,
+      responseCode: "429",
+    });
     throw new Error("Rate limit exceeded. Please wait a moment before sending another query.");
   }
   if (!res.ok) throw new Error("Failed to send chat query");
   return res.json();
 }
 
-// ── Troubleshoot ──────────────────────────────────────────────
+// Troubleshoot
 export async function sendTroubleshootQuery(
   problem: string
 ): Promise<TroubleshootResponse> {
@@ -214,13 +237,17 @@ export async function sendTroubleshootQuery(
     body:    JSON.stringify({ problem }),
   });
   if (res.status === 429) {
+    await reportClientError("WARN_004", "Rate limit exceeded on /api/troubleshoot", {
+      query: problem,
+      responseCode: "429",
+    });
     throw new Error("Rate limit exceeded. Please wait before submitting another diagnostic.");
   }
   if (!res.ok) throw new Error("Failed to send troubleshoot query");
   return res.json();
 }
 
-// ── WebSocket live stream ─────────────────────────────────────
+// WebSocket live stream 
 // Passes JWT as query param since WebSocket headers aren't
 // supported in browsers.
 export function connectLiveStream({
@@ -252,6 +279,11 @@ export function connectLiveStream({
 
   ws.onclose = (event) => {
     console.log("WebSocket disconnected", event.code);
+    if (event.code !== 1000) {
+      reportClientError("ERR_005", `WebSocket closed unexpectedly with code ${event.code}`, {
+        page: window.location.pathname,
+      });
+    }
     // Code 1008 = policy violation = JWT rejected
     if (event.code === 1008) {
       localStorage.removeItem(AUTH_TOKEN_KEY);

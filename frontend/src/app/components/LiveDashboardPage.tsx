@@ -25,6 +25,7 @@ import {
   LiveSnapshot,
   Prediction,
 } from "../../api";
+import { reportClientError } from "../../errorLogger";
 
 const productFilters = ["All", "REF", "WMC", "COMP", "RAC", "A08"];
 
@@ -57,7 +58,12 @@ export function LiveDashboardPage() {
         setPredictions(preds.predictions);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        reportClientError("ERR_001", err instanceof Error ? err.message : "Initial load failed", {
+          page: "/live-dashboard",
+        });
+        setLoading(false);
+      });
   }, []);
 
   //  WebSocket for per-second live updates
@@ -76,7 +82,11 @@ export function LiveDashboardPage() {
     const interval = setInterval(() => {
       fetchPredictions()
         .then(preds => setPredictions(preds.predictions))
-        .catch(() => {});
+        .catch((err) => {
+          reportClientError("ERR_001", err instanceof Error ? err.message : "Periodic prediction update failed", {
+            page: "/live-dashboard",
+          });
+        });
     }, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -85,7 +95,11 @@ export function LiveDashboardPage() {
   const handleRefresh = useCallback(() => {
     fetchPredictions()
       .then(preds => setPredictions(preds.predictions))
-      .catch(() => {});
+      .catch((err) => {
+        reportClientError("ERR_001", err instanceof Error ? err.message : "Manual refresh failed", {
+          page: "/live-dashboard",
+        });
+      });
   }, []);
 
   // Filtered rows

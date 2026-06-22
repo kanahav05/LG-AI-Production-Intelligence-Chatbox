@@ -12,3 +12,4 @@ PyJWT
 slowapi
 python-multipart
 bcrypt
+pydantic-settings

@@ -76,7 +76,7 @@ export function Header({ alerts }: HeaderProps) {
 
   function handleSignOut() {
     signOut()
-    navigate('/')
+    navigate('/', { replace: true })
   }
 
   const navLinks = [

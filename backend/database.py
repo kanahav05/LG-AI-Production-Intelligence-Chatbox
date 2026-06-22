@@ -5,6 +5,7 @@
 
 import sqlite3
 import os
+from datetime import datetime 
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "production.db")
 
@@ -19,6 +20,31 @@ def get_connection():
     conn.execute("PRAGMA cache_size=-64000")   # 64MB cache
     conn.execute("PRAGMA temp_store=MEMORY")
     return conn
+
+def write_audit(conn, action, line, changed_by, record_id=None):
+    conn.execute("""
+        INSERT INTO production_audit
+        (production_id, line, action, changed_by, changed_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        record_id,
+        line,
+        action,
+        changed_by,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+
+
+def get_last_updated_user():
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT changed_by, changed_at, line
+        FROM production_audit
+        ORDER BY changed_at DESC
+        LIMIT 1
+    """).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 # Table creation
 def init_db():
@@ -52,6 +78,18 @@ def init_db():
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_date_phase
         ON production_history (date, phase)
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS production_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            production_id INTEGER,
+            line TEXT NOT NULL,
+            action TEXT NOT NULL,
+            changed_by TEXT NOT NULL,
+            changed_at TEXT NOT NULL,
+            FOREIGN KEY(production_id)
+            REFERENCES production_history(id)
+        )
     """)
 
     # Troubleshooting tables
@@ -170,20 +208,23 @@ def query_resolution_history(query: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 # Bulk insert 
-def insert_records(records: list[dict]):
-    """Inserts a list of record dicts into production_history.
-    Used by generate_all.py during the one-time data generation."""
+def insert_records(records: list[dict], changed_by="system"):
     conn = get_connection()
-    conn.executemany("""
-        INSERT INTO production_history
-            (date, time, line, product, product_name,
-             phase, plan, target, result, achieve, below_threshold)
-        VALUES
-            (:date, :time, :line, :product, :product_name,
-             :phase, :plan, :target, :result, :achieve, :below_threshold)
-    """, records)
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute("BEGIN")
+        for record in records:
+            cursor = conn.execute("""
+                INSERT INTO production_history
+                    (date, time, line, product, product_name,
+                     phase, plan, target, result, achieve, below_threshold)
+                VALUES
+                    (:date, :time, :line, :product, :product_name,
+                     :phase, :plan, :target, :result, :achieve, :below_threshold)
+            """, record)
+            write_audit(conn, "INSERT", record["line"], changed_by, cursor.lastrowid)
+        conn.commit()
+    finally:
+        conn.close()
 
 # Record count
 def get_record_count():

@@ -2,6 +2,7 @@
 # FastAPI backend — main entry point.
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect, Depends, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
@@ -32,10 +33,56 @@ app.state.limiter = limiter
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    log_error_event(
+        "WARN_004",
+        "Rate limit exceeded",
+        page=request.url.path,
+        response_code="429",
+    )
     return JSONResponse(
         status_code = 429,
         content     = {"detail": "Rate limit exceeded. Please wait before retrying."}
     )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code >= 500:
+        log_error_event(
+            "ERR_001",
+            exc.detail or "Internal server error",
+            page=request.url.path,
+            response_code=str(exc.status_code),
+        )
+    elif exc.status_code == 401:
+        log_error_event(
+            "INFO_005",
+            "Token expired or unauthorized request",
+            page=request.url.path,
+            response_code=str(exc.status_code),
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    log_error_event(
+        "ERR_001",
+        "Invalid request payload",
+        page=request.url.path,
+        response_code="422",
+        request_info={"errors": exc.errors()},
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    log_error_event(
+        "ERR_001",
+        str(exc),
+        page=request.url.path,
+        response_code="500",
+        request_info={"path": request.url.path},
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 # Security headers middleware 
 from middleware import SecurityHeadersMiddleware
@@ -67,6 +114,7 @@ from database  import (
 )
 from ml  import predict_line, predict_all, train_models
 from rag import process_chat, process_troubleshoot
+from error_logging import log_error_event
 
 # User store
 VALID_USERS = {
@@ -95,6 +143,17 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class ClientErrorLogRequest(BaseModel):
+    error_code: str
+    message: str
+    user_id: str | None = None
+    user_name: str | None = None
+    user_role: str | None = None
+    page: str | None = None
+    query: str | None = None
+    response_code: str | None = None
+    screenshot: str | None = None
+
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
     user = VALID_USERS.get(req.username)
@@ -103,6 +162,26 @@ async def login(req: LoginRequest):
     token_data   = {"user_id": req.username, "name": user["name"], "role": user["role"]}
     access_token = create_access_token(token_data)
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/api/errors/log")
+async def log_client_error(req: ClientErrorLogRequest):
+    payload = log_error_event(
+        req.error_code,
+        req.message,
+        user_id=req.user_id,
+        user_name=req.user_name,
+        user_role=req.user_role,
+        page=req.page,
+        query=req.query,
+        response_code=req.response_code,
+        screenshot=req.screenshot,
+    )
+    return {
+        "ok": True,
+        "id": payload["id"],
+        "severity": payload["severity"],
+        "error_code": payload["error_code"],
+    }
 
 # Live snapshot
 @app.get("/api/live")
@@ -209,9 +288,30 @@ async def chat(
     query   = body.get("query", "")
     history = body.get("history", [])
     if not query.strip():
+        log_error_event(
+            "INFO_002",
+            "Empty chat query submitted",
+            user_id=current_user.get("user_id"),
+            user_name=current_user.get("name"),
+            user_role=current_user.get("role"),
+            page="/chatbox",
+            query=query,
+        )
         raise HTTPException(status_code=400, detail="Query cannot be empty")
-    result = process_chat(query, history)
-    # Return only clean production fields — no internal params
+    try:
+        result = process_chat(query, history)
+    except Exception as exc:
+        log_error_event(
+            "ERR_004",
+            str(exc),
+            user_id=current_user.get("user_id"),
+            user_name=current_user.get("name"),
+            user_role=current_user.get("role"),
+            page="/chatbox",
+            query=query,
+            response_code="500",
+        )
+        raise HTTPException(status_code=500, detail="Failed to process chat request")
     return {
         "response":  result["response"],
         "rows_used": result["rows_used"],
@@ -229,8 +329,30 @@ async def troubleshoot(
 ):
     problem = body.get("problem", "")
     if not problem.strip():
+        log_error_event(
+            "INFO_002",
+            "Empty troubleshoot request submitted",
+            user_id=current_user.get("user_id"),
+            user_name=current_user.get("name"),
+            user_role=current_user.get("role"),
+            page="/chatbox",
+            query=problem,
+        )
         raise HTTPException(status_code=400, detail="Problem description cannot be empty")
-    return process_troubleshoot(problem)
+    try:
+        return process_troubleshoot(problem)
+    except Exception as exc:
+        log_error_event(
+            "ERR_004",
+            str(exc),
+            user_id=current_user.get("user_id"),
+            user_name=current_user.get("name"),
+            user_role=current_user.get("role"),
+            page="/chatbox",
+            query=problem,
+            response_code="500",
+        )
+        raise HTTPException(status_code=500, detail="Failed to process troubleshoot request")
 
 # Predict all lines 
 @app.get("/api/predict/all")
