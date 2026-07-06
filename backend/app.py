@@ -365,7 +365,18 @@ async def predict_one(
     line: str,
     current_user: dict = Depends(get_current_user)
 ):
-    return predict_line(line)
+    result = predict_line(line)
+    if "error" in result:
+        log_error_event(
+            "WARN_005",
+            result["error"],
+            user_id=current_user.get("user_id"),
+            user_name=current_user.get("name"),
+            user_role=current_user.get("role"),
+            response_code="404",
+        )
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
 
 # WebSocket live stream 
 class ConnectionManager:

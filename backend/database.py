@@ -157,6 +157,13 @@ def seed_troubleshooting_tables():
     conn.commit()
     conn.close()
 
+def _normalise_row(row) -> dict:
+    """Convert a production_history row to a dict with below_threshold as bool."""
+    d = dict(row)
+    if "below_threshold" in d:
+        d["below_threshold"] = bool(d["below_threshold"])
+    return d
+
 def query_problem_library(query: str) -> list[dict]:
     conn = get_connection()
     words = [f"%{w}%" for w in query.split() if len(w) > 2]
@@ -245,7 +252,7 @@ def query_by_date_line(date: str, line: str) -> list[dict]:
         ORDER BY time ASC
     """, (date, line)).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_normalise_row(r) for r in rows]
 
 # Query: by date and product 
 def query_by_date_product(date: str, product: str) -> list[dict]:
@@ -257,7 +264,7 @@ def query_by_date_product(date: str, product: str) -> list[dict]:
         ORDER BY line ASC, time ASC
     """, (date, product)).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_normalise_row(r) for r in rows]
 
 # Query: by date and phase 
 def query_by_date_phase(date: str, phase: str) -> list[dict]:
@@ -269,7 +276,7 @@ def query_by_date_phase(date: str, phase: str) -> list[dict]:
         ORDER BY line ASC
     """, (date, phase)).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_normalise_row(r) for r in rows]
 
 # Query: by date, line, and time (closest match) 
 def query_closest_snapshot(date: str, line: str, time: str) -> dict | None:
@@ -288,7 +295,7 @@ def query_closest_snapshot(date: str, line: str, time: str) -> dict | None:
         LIMIT 1
     """, (date, line, time, time)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _normalise_row(row) if row else None
 
 # Query: day summary (end-of-day totals)
 def query_day_summary(date: str) -> dict | None:
@@ -362,7 +369,7 @@ def query_for_rag(
         LIMIT ?
     """, params + [limit]).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_normalise_row(r) for r in rows]
 
 
 if __name__ == "__main__":

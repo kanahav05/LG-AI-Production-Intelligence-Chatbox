@@ -264,7 +264,9 @@ def log_error_event(
     }
 
     if should_email_error(error_code):
-        send_error_email(payload)
+        import threading
+        t = threading.Thread(target=send_error_email, args=(payload,), daemon=True)
+        t.start()
 
     return payload
 

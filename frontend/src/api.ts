@@ -250,6 +250,7 @@ export async function sendTroubleshootQuery(
 // WebSocket live stream 
 // Passes JWT as query param since WebSocket headers aren't
 // supported in browsers.
+// Auto-reconnects with exponential backoff on unexpected disconnects.
 export function connectLiveStream({
   onSnapshot,
   onAlert,
@@ -257,40 +258,78 @@ export function connectLiveStream({
   onSnapshot:  (data: LiveSnapshot) => void;
   onAlert?:    (alerts: LiveSnapshot["alerts"]) => void;
 }): () => void {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  const url   = `ws://localhost:8000/ws/live${token ? `?token=${token}` : ""}`;
-  const ws    = new WebSocket(url);
+  let stopped    = false;
+  let retries    = 0;
+  const MAX_RETRIES = 5;
+  let currentWs: WebSocket | null = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  ws.onopen = () => {
-    console.log("WebSocket connected to live stream");
-  };
+  function connect() {
+    if (stopped) return;
 
-  ws.onmessage = (event) => {
-    const data: LiveSnapshot = JSON.parse(event.data);
-    onSnapshot(data);
-    if (onAlert && data.alerts?.length > 0) {
-      onAlert(data.alerts);
-    }
-  };
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    const url   = `ws://localhost:8000/ws/live${token ? `?token=${token}` : ""}`;
+    const ws    = new WebSocket(url);
+    currentWs   = ws;
 
-  ws.onerror = (err) => {
-    console.error("WebSocket error:", err);
-  };
+    ws.onopen = () => {
+      console.log("WebSocket connected to live stream");
+      retries = 0; // reset retry counter on successful connection
+    };
 
-  ws.onclose = (event) => {
-    console.log("WebSocket disconnected", event.code);
-    if (event.code !== 1000) {
+    ws.onmessage = (event) => {
+      const data: LiveSnapshot = JSON.parse(event.data);
+      onSnapshot(data);
+      if (onAlert && data.alerts?.length > 0) {
+        onAlert(data.alerts);
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error("WebSocket error:", err);
+    };
+
+    ws.onclose = (event) => {
+      console.log("WebSocket disconnected", event.code);
+
+      // Code 1000 = clean close (navigated away) — do not reconnect
+      if (event.code === 1000 || stopped) return;
+
+      // Code 1008 = JWT rejected — clear session and redirect
+      if (event.code === 1008) {
+        reportClientError("ERR_005", `WebSocket JWT rejected (code 1008)`, {
+          page: window.location.pathname,
+        });
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem("lg-user");
+        window.location.href = "/";
+        return;
+      }
+
+      // Unexpected disconnect — log and attempt reconnect
       reportClientError("ERR_005", `WebSocket closed unexpectedly with code ${event.code}`, {
         page: window.location.pathname,
       });
-    }
-    // Code 1008 = policy violation = JWT rejected
-    if (event.code === 1008) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      localStorage.removeItem("lg-user");
-      window.location.href = "/";
-    }
-  };
 
-  return () => ws.close();
+      if (retries >= MAX_RETRIES) {
+        console.warn("WebSocket max retries reached, giving up.");
+        return;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 30s)
+      const delay = Math.min(1000 * Math.pow(2, retries), 30000);
+      retries++;
+      console.log(`WebSocket reconnecting in ${delay}ms (attempt ${retries}/${MAX_RETRIES})…`);
+      retryTimer = setTimeout(connect, delay);
+    };
+  }
+
+  connect();
+
+  // Return cleanup function
+  return () => {
+    stopped = true;
+    if (retryTimer) clearTimeout(retryTimer);
+    currentWs?.close(1000);
+  };
 }

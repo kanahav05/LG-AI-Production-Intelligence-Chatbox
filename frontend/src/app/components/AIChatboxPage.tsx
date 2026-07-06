@@ -546,11 +546,11 @@ export function AIChatboxPage() {
 
   // Render 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <Header />
 
       <div
-        className="flex-1 flex overflow-hidden relative"
+        className="flex-1 flex overflow-hidden relative min-h-0"
         style={{ height: "calc(100vh - 64px)" }}
       >
         {/* Sidebar */}
