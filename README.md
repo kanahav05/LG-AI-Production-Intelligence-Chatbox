@@ -33,7 +33,7 @@ An AI-powered, real-time factory production intelligence platform and chatbox. T
 
 * **Framework:** FastAPI (Python)
 * **Database:** SQLite (`production.db`)
-* **AI/ML:** Google GenAI SDK, Ollama (`llama3.2:1b`), Scikit-Learn
+* **AI/ML:** Google GenAI SDK, Scikit-Learn
 * **Security & Utilities:** SlowAPI, Dotenv, SMTP (Email Alerts)
 
 ### Frontend
