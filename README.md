@@ -83,7 +83,6 @@ An AI-powered, real-time factory production intelligence platform and chatbox. T
 
 * Python 3.10+
 * Node.js 18+
-* *(Optional)* [Ollama](https://ollama.com/) (For local LLM execution)
 
 ### 1. Environment Configuration
 
