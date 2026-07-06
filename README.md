@@ -16,7 +16,7 @@ An AI-powered, real-time factory production intelligence platform and chatbox. T
 ### 2. AI Chatbox & RAG Pipeline
 
 * **Retrieval-Augmented Generation (RAG):** Natural language querying over active SQLite production databases.
-* **Hybrid LLM Support:** Integrated with Google GenAI SDK alongside local fallback capabilities utilizing Ollama (`llama3.2:1b`).
+* **LLM USED:** Google GenAI SDK 
 * **Multi-Modal Inputs:** Supports voice-to-text queries and document context parsing.
 
 ### 3. Enterprise Guardrails
