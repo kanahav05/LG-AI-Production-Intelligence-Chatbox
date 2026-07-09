@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Bell, User, LogOut, LayoutDashboard, MessageSquare, Activity, Menu, X, ChevronRight } from 'lucide-react'
 import { signOut } from '../../auth'
 import { AlertsContext } from '../alertsContext'
+const lgLogo = '/assets/LG_symbol.svg'
 
 interface Alert {
   line: string
@@ -103,9 +104,9 @@ export function Header({ alerts }: HeaderProps) {
         {/* Left — Logo + Nav */}
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-                 style={{ background: 'var(--lg-red)' }}>
-              LG
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden"
+                 style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 1px 4px rgba(0,0,0,0.10)' }}>
+              <img src={lgLogo} alt="LG Electronics" className="w-7 h-7 object-contain" />
             </div>
             <div>
               <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">

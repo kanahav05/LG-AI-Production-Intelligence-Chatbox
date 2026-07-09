@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signIn } from '../../auth'
+const img = '/assets/LG_symbol.svg'
 
 export function SignInPage() {
   const [employeeId, setEmployeeId] = useState('')
@@ -36,14 +37,16 @@ export function SignInPage() {
   />
   <div className="w-full max-w-md animate-fadeInUp">
     {/* Branding */}
-    <div className="text-center mb-8">
-      <div className=" mx-auto w-[78px] h-[78px] rounded-[22px] flex items-center justify-center shadow-md "
-        style={{ background: "var(--gradient-primary)"}}
-      >
-        <span className="text-white text-2xl font-bold">
-          LG
-        </span>
-      </div>
+      <div className="text-center mb-8">
+        <div className=" mx-auto w-[78px] h-[78px] rounded-[22px] flex items-center justify-center shadow-md overflow-hidden "
+          style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.06)" }}
+        >
+          <img
+            src={img}
+            alt="LG Electronics logo"
+            className="w-[62px] h-[62px] object-contain"
+          />
+        </div>
 
       <h1 className=" mt-5 text-[34px] font-semibold tracking-tight "
         style={{ color: "var(--foreground)"}}
